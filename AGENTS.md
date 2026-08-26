@@ -27,6 +27,7 @@ get a change reviewed, [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | [`docs/plugin-authoring.md`](docs/plugin-authoring.md) | Writing a plugin outside this repository: what it exports, the host API it is handed, how to declare data, and how an instance installs it. |
 | [`docs/plugin-isolation.md`](docs/plugin-isolation.md) | Where plugin code runs, why the sandbox was rejected, what protects an instance instead, and what would bring the decision back. |
 | [`docs/settings.md`](docs/settings.md) | The instance settings area: how a setting declares where it lives, the per-setting read gate, the account section, and where the area sits. |
+| [`docs/configuration.md`](docs/configuration.md) | Environment variables for local development, self-hosting and hosted deployments. |
 | [`src/i18n/`](src/i18n/) | The interface language: the two catalogues, how one is resolved for a reader, and the formatters that follow it. The modules document themselves. |
 | [`docs/mcp.md`](docs/mcp.md) | The MCP server and its tools. |
 | [`docs/deploy.md`](docs/deploy.md) | The Netlify deploy, the auth gate, JIRA linking. |

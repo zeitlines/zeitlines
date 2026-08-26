@@ -109,7 +109,7 @@ new one, start with the [`authoring guide`](docs/plugin-authoring.md) and the
 | Editing and saved views | [`Editing`](docs/editing.md) |
 | Source adapters and plugins | [`Architecture`](docs/architecture.md) |
 | HTTP and agent integrations | [`OpenAPI`](openapi.yaml) and [`MCP`](docs/mcp.md) |
-| Operating an instance | [`Self-hosting`](docs/self-hosting.md) and [`Deployment`](docs/deploy.md) |
+| Operating an instance | [`Configuration`](docs/configuration.md), [`Self-hosting`](docs/self-hosting.md), and [`Deployment`](docs/deploy.md) |
 
 The [`AGENTS.md`](AGENTS.md) index points to the reasoning and conventions behind
 each subsystem.
