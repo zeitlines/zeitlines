@@ -1,267 +1,131 @@
-# Zeitlines
+<p align="center">
+  <img src="src/design-system/assets/zeitlines-logo.svg" width="104" alt="Zeitlines logo">
+</p>
 
-A generic, self-hostable timeline and roadmap viewer built on
-[vis-timeline](https://visjs.github.io/vis-timeline/). It renders items, groups,
-phases and dependency arrows from either local files or a live Postgres
-database, and shows the same data as an interactive Timeline or a grouped List.
+<h1 align="center">Zeitlines</h1>
 
-Two orthogonal extension axes keep it flexible:
+<p align="center">
+  <strong>Open-source timelines for data you already own.</strong>
+</p>
 
-- **Source adapters** decide *where* a timeline's data comes from: local files (a
-  JSON file, or a directory with one Markdown file per item), or Postgres (via
-  either supabase-js or native postgres.js, with optional per-source
-  connections).
-- **Plugins** decide *what* a timeline carries beyond items and groups: a timeline
-  with no plugin is just timeline + list. `product-roadmap` adds a pricing matrix
-  and cards plus its own item fields, loaded lazily so a build without it ships
-  neither its code nor its stylesheet; `sprints` adds a sprint raster whose values
-  are computed rather than stored, and three verbs an agent can call.
+<p align="center">
+  Turn JSON, Markdown, or Postgres into interactive timelines, structured lists,
+  and specialized plugin views. Run locally or self-host for shared editing.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/zeitlines/zeitlines/actions/workflows/ci.yml"><img src="https://github.com/zeitlines/zeitlines/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white" alt="Node.js 22 or newer"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5c176f" alt="MIT License"></a>
+</p>
 
-- **Timeline + List views** over one build, toggled in the header, sharing all
-  state (selection, grouping, filter, edits).
-- **Rich items:** phases as a labeled ribbon, right-angle dependency arrows,
-  semantic icons, a built-in status field, colour-coded tags, and per-timeline
-  custom fields.
-- **Editable wherever a writable runtime serves the source:** drag to
-  move/resize, double-click to add, edit in a side form. Writes are item-level
-  with optimistic locking, so concurrent edits do not clobber each other. DB
-  sources are editable anywhere; local sources are editable while the dev server
-  serves them, because that process has a filesystem to write to.
-- **Local sources need no database:** drop a `*.json` into `data/` and it
-  registers itself as a view.
-- **Two DB drivers, one seam:** supabase-js (HTTP/PostgREST, the Netlify default)
-  or native postgres.js (any Postgres via a connection string), selected by env.
-- **Live collaboration:** other people's edits appear without reload, via
-  Supabase Realtime or a cheap watermark-polling fallback, plus presence avatars.
-- **Markdown directories as a source:** a folder with a `timeline.json` and one
-  `*.md` per item is a timeline, with item dates taken from frontmatter or from
-  the filename.
-- **Static HTML export** of any view, and an **MCP server** so Claude Code can
-  read and edit DB-backed timelines.
-- **Deployable behind auth:** a Netlify edge auth gate (Google OAuth + an
-  allowed-domain whitelist), JIRA issue linking, and a public read endpoint for
-  the data a plugin publishes.
-- **Single neutral theme,** themeable through CSS custom properties.
+<p align="center">
+  <a href="docs/overview.md">Documentation</a> ·
+  <a href="docs/self-hosting.md">Self-hosting</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-## Quickstart
+![Zeitlines showing a grouped project timeline](docs/assets/zeitlines-overview.jpg)
 
-### Self-host with your own Postgres (no Supabase)
+## Why Zeitlines
 
-One command, if you have Docker: `docker compose up --build` starts a Postgres,
-applies the migrations and serves on <http://localhost:3120>. The full picture —
-the two environments a timeline can live in and the access gate — is in
-[`docs/self-hosting.md`](docs/self-hosting.md). By hand:
+Planning data already lives in files, notes, and databases. Zeitlines turns those
+sources into one visual planning surface while keeping the source authoritative.
+
+- **Bring your own data.** Open a JSON file, treat a Markdown directory as a
+  timeline, or connect Postgres.
+- **Work visually.** Switch between Timeline, List, and Graph; group and filter
+  items; move, resize, and edit where the source permits writes.
+- **Collaborate safely.** Database timelines support live updates, presence, and
+  optimistic locking.
+- **Extend the model.** Plugins add fields, views, stored data, and agent tools
+  for a particular planning domain.
+- **Integrate with agents.** The MCP server exposes timeline reading, editing,
+  and plugin operations to compatible clients.
+
+## Quick start
+
+The included examples run without a database or credentials. Requires Node.js 22
+or newer.
 
 ```bash
-npm install
-docker run -d -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16   # 1. Postgres
-export TIMELINES_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres  # 2. target
-npm run db:migrate                                                     # 3. schema
-npm run build && npm start                                             # 4. serve it
-```
-
-`npm start` runs the built site and the API from one Node process
-([`scripts/serve.ts`](scripts/serve.ts)) — that is the supported way to self-host
-an **editable** deployment. `npm run dev` is for development; it serves the same
-API but through Vite, with a file watcher and no build step.
-
-**It brings no login of its own.** Put an authenticating reverse proxy in front
-(oauth2-proxy, Authelia, an SSO ingress) and tell the server which header carries
-the identity:
-
-```bash
-TIMELINES_TRUSTED_IDENTITY_HEADER=X-Forwarded-Email \
-TIMELINES_ALLOWED_EMAIL_DOMAINS=example.com \
-npm start
-```
-
-That switches the gate on: the header's value becomes the edit's `updated_by`,
-and an `/api/*` request arriving **without** it is refused with `401` — so an
-origin reached directly, bypassing the proxy, is not editable. Leave the variable
-unset and the API is open to anyone who can reach the port; the server says which
-of the two modes it is in on every start.
-
-The header is only trustworthy if the proxy strips it from incoming client
-requests. The server cannot verify that, which is why naming it is an explicit
-decision rather than a sniff for a well-known name.
-
-Static files stay ungated either way. The bundle carries no timeline data, so an
-unauthenticated visitor gets an empty shell whose every request the API just
-refused.
-
-`db:migrate` is a portable runner (no Supabase CLI needed): it applies
-`supabase/migrations/*.sql` in order and tracks what has run. `npm run dev` checks
-first and refuses to start with migrations pending, so the app never quietly talks
-to an older schema. Live updates need no extra setting: a Postgres without
-Supabase Realtime serves its timelines in polling mode automatically (the client
-polls a cheap watermark endpoint), and `TIMELINES_DB_LIVE` overrides that either
-way. Import example data with `npm run db:import`.
-
-### Local sources only (no database)
-
-Drop a `*.json` timeline into `data/` and run the viewer. The build copies it to
-`public/data/sources/<name>.json` and registers it automatically as a view
-(`src:<name>`); no database and no config edit required. Under `npm run dev` that
-view is editable and edits land back in your file; a static deploy serves the
-same file read-only, because there is no process behind it to write with.
-
-```bash
+git clone https://github.com/zeitlines/zeitlines.git
+cd zeitlines
 npm install
 npm run dev
 ```
 
-Add `"$schema": "../schema/timeline.schema.json"` at the top and your editor
-completes and validates the file. That schema is generated from the TypeScript
-types, so it cannot drift from what the app actually reads.
-`data/example-projektplan.json`, `data/launch-roadmap.json` and
-`data/programm-2026.json` are reference files;
-[`AGENTS.md`](AGENTS.md) explains the constraints a schema cannot express, such as
-why `end` and `duration` are mutually exclusive.
+Open <http://localhost:3120>. Add another `*.json` file to `data/` and it appears
+as a timeline automatically. The generated
+[`timeline.schema.json`](schema/timeline.schema.json) provides completion and
+validation in compatible editors.
 
-### Directory sources: one Markdown file per item
+## Choose your source
 
-A directory under `data/` is a timeline as well, as soon as it holds a
-`timeline.json`. That container file carries what no single item owns (`groups`
-including `nestedGroups`, `phases`, `groupBy`, `customFields`, `plugins`, `name`,
-`description`) and has no `items` array, because the items are the Markdown files
-next to it. The view id is the directory path relative to `data/`, so
-`data/notes/roadmap/` becomes `src:notes/roadmap`.
+| Source | Best for | Editing |
+| --- | --- | --- |
+| [JSON file](docs/data-model.md) | Portable timelines in one file | Available through the local development server |
+| [Markdown directory](docs/local-sources.md) | Plans that live beside notes or in a knowledge base | Updates the relevant frontmatter while preserving the document |
+| [Postgres](docs/database.md) | Shared timelines, live updates, and multi-user editing | Available through the API with optimistic locking |
 
-An item's dates come from its frontmatter, falling back to a date at the start of
-the filename. Which frontmatter keys count and which filename patterns are tried
-is set in `timelines.config.json` (`dateFields`, `filenameDatePatterns`); the
-first match in that order wins. Editing such an item patches the one frontmatter
-key that changed and leaves the rest of the file untouched, down to key order,
-comments and blank lines, so a folder you also edit by hand does not come back as
-a diff over every file. Deleting moves the file to `.trash/` rather than
-unlinking it.
+Every source resolves to the same timeline model. Views and plugins work across
+source kinds according to the capabilities exposed by the runtime.
 
-A `"$schema"` key in `timeline.json` pointing at `schema/container.schema.json`
-gets you editor completion for it, the same way a JSON timeline points at
-`schema/timeline.schema.json`. The design, the write path and what is deliberately
-still missing are in [`docs/local-sources.md`](docs/local-sources.md).
+## Self-hosting
 
-## Architecture
+Docker Compose starts Zeitlines with Postgres, applies the migrations, and serves
+the application on port 3120:
 
-Two steps: a build script (`scripts/build-data.ts`) prepares JSON + config, and a
-static Vite + TypeScript viewer (`src/`) renders it. The extension seams:
+```bash
+docker compose up --build
+```
 
-- **Source adapters** (`SourceKind` in `src/types.ts`, `resolveAdapter` in
-  `scripts/db/api.ts`): `local` sources are files the user owns, a JSON file or a
-  directory of Markdown; `db` sources live in Postgres. Whether a local source is
-  editable is decided by the runtime rather than by the format, stamped per source
-  into `view.source.editable` at build time and corrected upwards by the dev
-  server, so the client routes on one given value instead of probing. An editable
-  source loads from `GET /api/source/<id>`, a read-only one from the static copy
-  the build wrote. DB access goes through one `TimelineRepo` seam
-  (`scripts/db/repo.ts`) with two interchangeable drivers, supabase-js
-  (HTTP/PostgREST) or postgres.js (native TCP), selected by env. The same
-  dispatcher backs both the local Vite middleware and the Netlify edge function.
-- **Plugins** (`src/pluginHost/registry.ts`, plugins under `src/plugins/<id>/`):
-  a plugin declares item fields and optionally views, which the host renders into
-  chrome it creates itself. Lazily `import()`-ed, so a generic build ships no
-  plugin code and no plugin CSS.
-- **Live-update seam** (`watchTimeline` in `src/realtime.ts`): `realtime`
-  (Supabase WebSocket) or `poll` (watermark endpoint), chosen per source. A local
-  source polls a filesystem watermark while the dev server serves it, and is
-  static on a deploy, where nothing can change under it.
+For production deployments, put the server behind an authenticating reverse
+proxy and configure its trusted identity header. The
+[`self-hosting guide`](docs/self-hosting.md) covers access control, configuration,
+data persistence, and deployment topologies.
 
-The HTTP API is described in [`openapi.yaml`](openapi.yaml) (OpenAPI 3.1, generated
-from the TypeScript types), including the public, unauthenticated plugin read
-endpoint and the optimistic-locking contract.
+Zeitlines also supports a static, read-only build for file-backed timelines:
 
-[`docs/overview.md`](docs/overview.md) maps the layers onto each other: the path a
-request takes from the viewer down to a store, and how one timeline type is laid
-out as Postgres rows, as a single JSON file, or as a directory of Markdown. Each
-subsystem is then documented with its reasoning in [`docs/`](docs/): data model,
-items, editing, database, local sources, plugins, MCP, deploy. Each plugin
-documents itself in its own folder. [`AGENTS.md`](AGENTS.md) is the index plus
-the conventions that apply everywhere.
+```bash
+npm run build
+```
 
 ## Plugins
 
-A plugin contributes item fields, and optionally a view, to any timeline. It is
-enabled per timeline as data, and its code is loaded lazily, so a build carries only
-what the timelines in front of you actually use.
+Plugins adapt the common timeline model to a planning domain. They can contribute
+item fields, their own views, stored collections, and operations for agents.
 
-| Plugin | What it adds |
+Explore the available domains in the [`plugin catalogue`](PLUGINS.md). To add a
+new one, start with the [`authoring guide`](docs/plugin-authoring.md) and the
+[`plugin template`](src/plugins/_template/).
+
+## Documentation
+
+| Topic | Guide |
 | --- | --- |
-| [`product-roadmap`](src/plugins/product-roadmap/) | A pricing matrix and pricing cards, plus Version, Tier and Features fields derived from the pricing model. See its [`README.md`](src/plugins/product-roadmap/README.md). |
-| [`sprints`](src/plugins/sprints/) | A sprint raster: which sprint an item falls into is computed from its dates rather than stored, with Story Points and Confidence beside it, plus capacity, rebalancing and forecast verbs. See its [`README.md`](src/plugins/sprints/README.md). |
+| How the system fits together | [`Overview`](docs/overview.md) |
+| Timeline files and item fields | [`Data model`](docs/data-model.md) and [`Items`](docs/items.md) |
+| Editing and saved views | [`Editing`](docs/editing.md) |
+| Source adapters and plugins | [`Architecture`](docs/architecture.md) |
+| HTTP and agent integrations | [`OpenAPI`](openapi.yaml) and [`MCP`](docs/mcp.md) |
+| Operating an instance | [`Self-hosting`](docs/self-hosting.md) and [`Deployment`](docs/deploy.md) |
 
-The generated catalogue is [`PLUGINS.md`](PLUGINS.md).
-
-Building one: [`docs/plugin-playbook.md`](docs/plugin-playbook.md), starting from
-[`src/plugins/_template/`](src/plugins/_template/).
-
-## Theming
-
-The viewer ships a single neutral theme, as CSS custom properties in
-[`src/design-system/tokens/tokens.css`](src/design-system/tokens/tokens.css):
-colour tokens, typography, spacing and radii, lane colours, mark radius, plus the
-glyph sets in `icons.css` beside it. To recolour or re-type the viewer, override
-any of them in your own stylesheet loaded after `tokens.css`. There is no runtime
-brand selector: those two files are the single styling seam.
-
-The tokens are generated from
-[`tokens.json`](src/design-system/tokens/tokens.json) (`npm run tokens`), and
-everything the viewer draws is built from the components above them — see
-[`docs/design-system.md`](docs/design-system.md), and `/playground.html` for all
-of them on one page.
-
-## Configuration
-
-Environment variables (build-time `VITE_*` are baked into the bundle; server vars
-are read from `process.env`, then `.env.local`, then any file named by
-`TIMELINES_ENV_FILE`):
-
-| Var | Purpose |
-| --- | --- |
-| `TIMELINES_ENV_FILE` | Optional. Extra `.env` file(s) to read, `:`-separated, `~/` allowed. Off by default, so a fresh checkout reads nothing outside the repo. Use it when your credentials live elsewhere. |
-| `TIMELINES_DATABASE_URL` | Postgres connection string. Set to use the native postgres.js driver. Also enables per-source connections via `TIMELINES_DATABASE_URL_<NAMESPACE>`. |
-| `TIMELINES_MIGRATE_DATABASE_URL` | Connection used **only** for schema work (`db:migrate`, `db:check`). Needed on a Supabase-backed instance, because migrations are DDL and cannot run over PostgREST. Setting it does not change which driver serves the app. |
-| `TIMELINES_SUPABASE_URL` / `TIMELINES_SUPABASE_SERVICE_KEY` | Supabase project URL + service-role key. Used when `TIMELINES_DATABASE_URL` is unset. |
-| `TIMELINES_DB_LIVE` | Overrides the live-update mode of DB sources: `poll` (watermark polling, works against any Postgres) or `realtime` (Supabase Realtime). Unset derives it from the configured backend, so a plain Postgres already polls. |
-| `TIMELINES_SERVE_PORT` / `TIMELINES_SERVE_HOST` | `npm start` only. Where the self-hosted server listens; defaults to `TIMELINES_PORT` (3120) on `127.0.0.1`. Bind to `0.0.0.0` only behind a proxy — the server has no auth of its own. |
-| `TIMELINES_DIST_DIR` | `npm start` only. The built site to serve, default `dist/`. |
-| `TIMELINES_TRUSTED_IDENTITY_HEADER` | `npm start` only. Name of the request header an authenticating proxy sets (e.g. `X-Forwarded-Email`). Setting it **switches the gate on**: its value becomes the edit's `updated_by` and registers in the user directory, and an `/api/*` request arriving without it is refused (`401`). Unset leaves the API open to anyone who reaches the port. Only set this when the proxy strips the header from client requests. |
-| `TIMELINES_ALLOWED_EMAIL_DOMAINS` | `npm start` only, and only with the above. Comma-separated e-mail domains allowed through the gate, matched exactly (`example.com` does not admit `evil-example.com` or `mail.example.com`). Empty means any identity the proxy vouches for. |
-| `TIMELINES_SOURCES_SUBDIR` | Scope the local-source scan to `data/<subdir>/`. |
-| `TIMELINES_LOCAL_ROOT` | Where local sources are discovered, default `data/` inside the checkout. An absolute path (`~` is expanded) points the instance at a directory you already own — a notes folder, an Obsidian vault — instead of a copy of one inside the repository. Ids anchor to it, so they stay identical between the build and the API. |
-| `TIMELINES_LOCAL_READONLY` | `1` / `true` refuses every write to a local source, even where the runtime could perform one. For an instance pointed at a directory you write in for other reasons: the timeline is worth reading there, and a mis-click must not rewrite a note's frontmatter. Enforced in the repo (`501`), not by hiding the button. |
-| `VITE_JIRA_BASE_URL` | Public base URL for JIRA browse links. Empty renders keys as plain text. |
-| `AUTH_REQUIRED` / `ALLOWED_EMAIL_DOMAINS` | Netlify edge auth gate: `true` enables it; comma-separated allowed sign-in domains (empty = nobody passes). The domain list only decides while `TIMELINES_ACCESS_CONTROL` is off. |
-| `TIMELINES_ACCESS_CONTROL` | See [`docs/users.md`](docs/users.md) for the whole model and the rollout order. `true` makes the member list decide, both at sign-in and on every `/api/*` call: roles (`admin` / `editor` / `viewer`) and an invitation become the way in, and the domain list stops being consulted. Off by default, because an instance whose member list is not yet populated would refuse everybody. Needs a database. |
-| `TIMELINES_BOOTSTRAP_ADMIN` | With the above: the one address that becomes an admin on first sign-in, even against an empty member list. Without it a fresh instance has nobody who can invite. Keep it set — it is the instance's master key. |
-| `MCP_TOKEN_ROLE` | With the above: the role the `X-MCP-Token` service identity acts with, default `editor`. Set `viewer` for a read-only agent. |
-| `TIMELINES_DEFAULT_LANGUAGE` | `de` or `en`: the interface language for somebody who has not picked one, on this deployment. The language is per person (`#settings=account`), so this decides only the starting point — for a new colleague on an instance whose team works in one language. Unset means the product default, English. An unrecognised value reads as unset rather than failing. |
-
-## Deploy (Netlify)
-
-Config-as-code lives in [`netlify.toml`](netlify.toml); instance-specific values
-and secrets go in the Netlify dashboard. `netlify build` produces the static site
-plus the edge functions (auth gate, timelines API, public API). See
-[`AGENTS.md`](AGENTS.md) for the auth gate, Supabase/Postgres setup, and the MCP
-server.
+The [`AGENTS.md`](AGENTS.md) index points to the reasoning and conventions behind
+each subsystem.
 
 ## Contributing
 
-Issues and pull requests are welcome at
-<https://github.com/zeitlines/zeitlines/issues>. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, the checks CI runs, and the
-conventions worth knowing. Contributing needs **no database**: local sources run
-on a plain `npm install && npm run dev`. Requires Node 22 or newer.
+Contributions are welcome. A database-free development environment starts with
+the same `npm install && npm run dev` used above. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the test suite, generated artifacts, and
+review conventions.
 
-[`AGENTS.md`](AGENTS.md) is the single source of truth for the data model, schema,
-extension seams and conventions. Read it before larger changes and keep it in
-sync when behaviour changes.
-
-Security reports go through a private advisory, not a public issue: see
+Use [GitHub Issues](https://github.com/zeitlines/zeitlines/issues) for bugs and
+feature proposals. Report vulnerabilities through the private process in
 [`SECURITY.md`](SECURITY.md). Participation is covered by the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+[`Code of Conduct`](CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+[MIT](LICENSE)

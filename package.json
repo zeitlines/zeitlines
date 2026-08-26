@@ -2,7 +2,7 @@
   "name": "zeitlines",
   "private": true,
   "version": "0.0.1",
-  "description": "Generic timeline/roadmap viewer (vis-timeline) with pluggable source adapters (file JSON, Postgres) and timeline kinds (generic, product-roadmap).",
+  "description": "Open-source timelines for JSON, Markdown, and Postgres data.",
   "license": "MIT",
   "type": "module",
   "scripts": {
