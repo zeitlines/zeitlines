@@ -55,10 +55,10 @@ bundle-split check (below). What the checks expect:
 - **`npm run build` must succeed without any credentials.** That is the path
   anyone takes after a plain `git clone`: no DB timelines are discovered and a
   missing notes directory only warns. Please do not make either of those fatal.
-- **`npm run typecheck` currently reports 7 pre-existing errors** (`Dirent`
-  typing in `build-data.ts`, a missing `@types/ws`, two library signature
-  mismatches). The step is non-blocking in CI for that reason. Do not add new
-  ones: check that the count has not grown. Fixing the remaining seven so the
+- **`npm run typecheck` currently reports 2 pre-existing errors** (a missing
+  `@types/ws` declaration and a `vis-timeline` group signature mismatch in
+  `render.ts`). The step is non-blocking in CI for that reason. Do not add new
+  ones: check that the count has not grown. Fixing the remaining two so the
   step can be made blocking is a welcome standalone contribution.
 - **If you change a type in `src/types.ts`, run `npm run schema && npm run
   openapi`** and commit the regenerated `schema/*.json` and `openapi.yaml`. Both
