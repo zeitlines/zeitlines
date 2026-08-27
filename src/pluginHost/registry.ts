@@ -25,6 +25,7 @@ import { viewLoader } from './viewLoaders';
 import { productRoadmapDescriptor } from '../plugins/product-roadmap/descriptor';
 import { sprintsDescriptor } from '../plugins/sprints/descriptor';
 import { lifecycleDescriptor } from '../plugins/lifecycle/descriptor';
+import { constructionDescriptor } from '../plugins/construction/descriptor';
 import type { HostApi } from './hostApi';
 
 /**
@@ -178,6 +179,11 @@ register(sprintsDescriptor);
 // (src/plugins/lifecycle/README.md). It is therefore the plugin to read first when
 // asking what the contract costs without a chunk of view code.
 register(lifecycleDescriptor);
+// The fourth, and the one that reads a CORE relation rather than only its own fields:
+// its chain shift walks `metadata.dependsOn`, so it is the plugin to read when asking
+// what the contract costs a domain whose rules live in the edges between items
+// (src/plugins/construction/README.md).
+register(constructionDescriptor);
 
 /** Every registered plugin, in registration order. */
 /**

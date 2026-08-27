@@ -10,6 +10,22 @@ Its own README is the page that documents it.
 Writing one: [docs/plugin-authoring.md](docs/plugin-authoring.md) for the contract,
 [docs/plugin-playbook.md](docs/plugin-playbook.md) for the process.
 
+## construction
+
+### [Construction schedule](src/plugins/construction/README.md)
+
+Sequences trades by the wait each one owes the next, shifts the whole chain when one runs late, and reports the fixed dates that shift runs into.
+
+![Construction schedule](src/plugins/construction/preview.png)
+
+| | |
+| --- | --- |
+| Id | `dev.zeitlines.construction` |
+| Version | 0.1.0 |
+| Keywords | bauzeitenplan, construction schedule, bauablaufplan, gewerke, trades, lag time, zeitabstand, wartezeit, bauabschnitt, chain shift, vertragsfrist, kontrollfrist, fixed date, self-hosted construction schedule |
+| Example | [`src:example-bauzeitenplan`](data/example-bauzeitenplan.json) |
+| Agent tools | `check_trade_conflicts`, `shift_trade_chain` |
+
 ## delivery-planning
 
 ### [Sprints](src/plugins/sprints/README.md)

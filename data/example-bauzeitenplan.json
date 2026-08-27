@@ -1,0 +1,213 @@
+{
+  "$schema": "../schema/timeline.schema.json",
+  "name": "Innenausbau, zwei Geschosse (Bauzeitenplan)",
+  "description": "Example for the „Construction schedule\" plugin: an interior fit-out of three flats, sequenced by the wait each trade owes the next. The five trades and their waits are example values and nothing else — a shipped table of lead times would be stale and unverifiable, so the config here is what a project would fill in, not what the plugin knows. The 28 days on the screed are the order of magnitude the drying-time sources give for a cement screed of moderate thickness, and even there the binding criterion is a measurement rather than a date (see the plugin's open questions). Every state the rules distinguish is present once: a chain that holds, two trades touching end to start in one flat, an item whose earliest start is the latest of two predecessors, a parquet floor laid twelve days before the screed allows it, two trades overlapping in one flat, a trade the config does not define (and therefore work behind it that cannot be dated), a contract deadline that holds and a control deadline that is already two days past. Group by „Bauzeitenplan · Gewerk\" to see the trades separate out, or by „Bauzeitenplan · Bauabschnitt\" to see one flat at a time. Deliberately absent: a cycle in the dependencies and an item with no dates. Both are reported by check_trade_conflicts and both would drown the rest of the demonstration.",
+  "groupBy": "cf:trade",
+  "plugins": [
+    {
+      "id": "dev.zeitlines.construction",
+      "config": {
+        "trades": [
+          { "id": "electrical", "label": "Elektro", "lagDays": 0 },
+          { "id": "drywall", "label": "Trockenbau", "lagDays": 1 },
+          { "id": "screed", "label": "Estrich", "lagDays": 28 },
+          { "id": "painting", "label": "Malerarbeiten", "lagDays": 2 },
+          { "id": "flooring", "label": "Parkett", "lagDays": 0 }
+        ]
+      }
+    }
+  ],
+  "savedViews": [
+    {
+      "id": "nach-gewerk",
+      "name": "Nach Gewerk",
+      "groupBy": "cf:trade",
+      "visibility": "instance"
+    },
+    {
+      "id": "nach-bauabschnitt",
+      "name": "Nach Bauabschnitt",
+      "groupBy": "cf:section",
+      "visibility": "instance"
+    }
+  ],
+  "groups": [
+    { "id": "og1", "content": "1. Obergeschoss" },
+    { "id": "og2", "content": "2. Obergeschoss" }
+  ],
+  "items": [
+    {
+      "id": "A-1",
+      "start": "2026-09-01",
+      "end": "2026-09-05",
+      "content": "Elektro Rohinstallation WE-3",
+      "group": "og1",
+      "status": "Done",
+      "icon": "build",
+      "body": "## The head of the chain\n\nNothing depends on anything before it, so it has no earliest start. Electrical imposes no wait, which is why the drywall behind it may begin the day this ends.",
+      "metadata": {
+        "trade": "electrical",
+        "section": "WE-3"
+      }
+    },
+    {
+      "id": "A-2",
+      "start": "2026-09-05",
+      "end": "2026-09-12",
+      "content": "Trockenbau WE-3",
+      "group": "og1",
+      "status": "Done",
+      "icon": "build",
+      "body": "## Touching end to start is not an overlap\n\nThis begins the day the electrical work ends, in the same flat. Two trades handing a section over is the normal case and the rule is written so it does not report one.",
+      "metadata": {
+        "trade": "drywall",
+        "section": "WE-3",
+        "dependsOn": ["A-1"]
+      }
+    },
+    {
+      "id": "A-3",
+      "start": "2026-09-14",
+      "end": "2026-09-16",
+      "content": "Estrich WE-3",
+      "group": "og1",
+      "status": "Doing",
+      "icon": "build",
+      "body": "## One day of wait, honoured\n\nThe drywall imposes a day, so the earliest start is the 13th and this begins on the 14th.",
+      "metadata": {
+        "trade": "screed",
+        "section": "WE-3",
+        "dependsOn": ["A-2"]
+      }
+    },
+    {
+      "id": "A-4",
+      "start": "2026-09-17",
+      "end": "2026-09-21",
+      "content": "Malerarbeiten WE-3",
+      "group": "og1",
+      "status": "Open",
+      "icon": "build",
+      "body": "## A second branch off the same predecessor\n\nPainting walls does not wait for the screed, so it hangs off the drywall instead. Modelling it as depending on the screed would have inherited the screed's 28 days, which is the first open question this plugin names.",
+      "metadata": {
+        "trade": "painting",
+        "section": "WE-3",
+        "dependsOn": ["A-2"]
+      }
+    },
+    {
+      "id": "A-5",
+      "start": "2026-10-14",
+      "end": "2026-10-19",
+      "content": "Parkett WE-3",
+      "group": "og1",
+      "status": "Open",
+      "icon": "build",
+      "body": "## The latest of two predecessors wins\n\nThe screed ends 2026-09-16 and asks for 28 days, which is 2026-10-14. The painting ends 2026-09-21 and asks for two, which is 2026-09-23. The earliest start is the later of them, and this starts on it.",
+      "metadata": {
+        "trade": "flooring",
+        "section": "WE-3",
+        "dependsOn": ["A-3", "A-4"]
+      }
+    },
+    {
+      "id": "B-1",
+      "start": "2026-09-17",
+      "end": "2026-09-19",
+      "content": "Estrich WE-4",
+      "group": "og1",
+      "status": "Doing",
+      "icon": "build",
+      "metadata": {
+        "trade": "screed",
+        "section": "WE-4"
+      }
+    },
+    {
+      "id": "B-2",
+      "start": "2026-10-05",
+      "end": "2026-10-10",
+      "content": "Parkett WE-4",
+      "group": "og1",
+      "status": "Open",
+      "icon": "warning",
+      "body": "## Laid twelve days too early\n\nThe screed in this flat ends 2026-09-19 and asks for 28 days, so the earliest start is 2026-10-17. This begins on the 5th.",
+      "metadata": {
+        "trade": "flooring",
+        "section": "WE-4",
+        "dependsOn": ["B-1"]
+      }
+    },
+    {
+      "id": "B-3",
+      "start": "2026-10-07",
+      "duration": "5d",
+      "content": "Malerarbeiten WE-4",
+      "group": "og1",
+      "status": "Open",
+      "icon": "warning",
+      "body": "## Two trades in one flat at once\n\nThree days of this run inside the parquet work in the same flat. The extent comes from a duration rather than an end, which is the other way an item can say how long it takes.",
+      "metadata": {
+        "trade": "painting",
+        "section": "WE-4"
+      }
+    },
+    {
+      "id": "C-1",
+      "start": "2026-09-01",
+      "end": "2026-09-04",
+      "content": "Fensterbau WE-7",
+      "group": "og2",
+      "status": "Done",
+      "icon": "warning",
+      "body": "## A trade the config does not define\n\nThere is no `windows` entry, so no wait can be read from it and nothing behind it can be dated. Reported as two separate findings, because „this trade is unknown\" and „this work cannot be scheduled\" are two different things to fix.",
+      "metadata": {
+        "trade": "windows",
+        "section": "WE-7"
+      }
+    },
+    {
+      "id": "C-2",
+      "start": "2026-09-07",
+      "end": "2026-09-11",
+      "content": "Elektro Rohinstallation WE-7",
+      "group": "og2",
+      "status": "Open",
+      "icon": "build",
+      "body": "## No earliest start at all\n\nIts one predecessor cannot be judged, so this has no computed earliest start rather than a plausible one. A value taken from the judgeable predecessors would be too early and would be shown as a fact.",
+      "metadata": {
+        "trade": "electrical",
+        "section": "WE-7",
+        "dependsOn": ["C-1"]
+      }
+    },
+    {
+      "id": "M-1",
+      "start": "2026-10-30",
+      "content": "Übergabe an den Bauherrn",
+      "group": "og1",
+      "status": "Open",
+      "icon": "milestone",
+      "body": "## A contract deadline that holds\n\nThe last work it waits on allows it from 2026-10-19, and the date is the 30th, so the plan carries eleven days of slack against it. Shift the screed in WE-3 by twelve and this stops holding: the verb reports by how much, and says it is a Vertragsfrist, whose consequence is a different one from a Kontrollfrist's.",
+      "metadata": {
+        "fixedDate": "2026-10-30",
+        "dateBinding": "contract",
+        "dependsOn": ["A-5", "B-2", "B-3"]
+      }
+    },
+    {
+      "id": "M-2",
+      "start": "2026-09-10",
+      "content": "Zwischenabnahme Rohinstallation",
+      "group": "og1",
+      "status": "Open",
+      "icon": "deadline",
+      "body": "## A control deadline, two days past\n\nDated the 8th and reached the 10th. Under the VOB/B an intermediate date of a Bauzeitenplan is a Kontrollfrist unless the parties agreed otherwise, and exceeding one has no consequence of its own — which is exactly what the report says instead of calling it a breach.",
+      "metadata": {
+        "fixedDate": "2026-09-08",
+        "dateBinding": "control",
+        "dependsOn": ["A-1"]
+      }
+    }
+  ]
+}
