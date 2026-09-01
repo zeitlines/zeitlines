@@ -85,6 +85,7 @@ import { attachItemRail } from './itemRail';
 import { attachItemCollapse } from './itemCollapse';
 import { attachItemContextMenu } from './contextMenu';
 import { attachOverrunLines } from './overrun';
+import { attachWheelZoom } from './wheelZoom';
 import { deleteItem, setItemFieldValue, setItemStatus, showItemForm } from './itemForm';
 import { showDetailForId, hideDetail } from './detailPanel';
 import { renderListView } from './listView';
@@ -757,11 +758,12 @@ export async function renderTimeline(view: View) {
     // re-flows vertically as items enter/leave the viewport).
     stack: false,
     horizontalScroll: true,
+    // Kept as a safety net: our own handler (attachWheelZoom) takes every zoom
+    // gesture over, but if it ever failed to attach, vis must still only zoom on
+    // ctrl+wheel, never on a plain scroll.
     zoomKey: 'ctrlKey',
-    // Higher = gentler zoom per wheel/trackpad-pinch step (vis default is 5). A
-    // Mac trackpad pinch arrives as a ctrl+wheel event and goes through vis's
-    // mousewheel zoom, so this tames pinch sensitivity too.
-    zoomFriction: 15,
+    // vis's own wheel zoom is superseded by attachWheelZoom below, which is why
+    // there is no zoomFriction here any more: the friction lives in wheelZoom.ts.
     // Prepend the brand-resolved icon at render time so the stored `content`
     // stays clean (used by the edit form, confirm dialogs, and Sheets).
     template: (item: TimelineItem) =>
@@ -844,6 +846,10 @@ export async function renderTimeline(view: View) {
   // And for the overrun line, whose length is a duration and therefore depends on
   // the current zoom (see overrun.ts).
   attachOverrunLines(timeline);
+
+  // Own the wheel/pinch zoom so it feels identical in every browser (Safari's
+  // pinch crawled under vis's own handler). See wheelZoom.ts.
+  attachWheelZoom(timeline, els.timeline);
 
   // The pale body behind an expanded subtree is created unconditionally: a
   // timeline may gain or lose visible hierarchy through folding and filtering
