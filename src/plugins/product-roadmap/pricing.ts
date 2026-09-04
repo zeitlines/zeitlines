@@ -28,6 +28,14 @@ function cell(s: string): string {
   return s.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim();
 }
 
+// Flatten a value for use outside a table (headings, list items): a newline
+// would end the line early and break the surrounding Markdown structure, so it
+// collapses to a single space. Trimmed by the caller, which decides what counts
+// as empty.
+function inline(s: string): string {
+  return s.replace(/\s*\n\s*/g, ' ');
+}
+
 // Display label for a version id, falling back to the id itself when no label is
 // declared. Every place that PRINTS a version (the switcher, the "ab <version>"
 // chips, the version dropdowns, the exported matrix) goes through here; the
@@ -531,6 +539,34 @@ export function pricingToMarkdown(doc: PricingDoc, opts: { updated: string }): s
       }
     }
     lines.push('');
+
+    // ---- Tier profiles ---------------------------------------------------
+    // tagline / useCase / targetGroup are prose the matrix cannot hold (a cell
+    // is a ✓ or a number, not a sentence), so tiers carrying any of them get a
+    // block of their own under a shared heading, one line per populated field.
+    // A tier with none stays out entirely: an empty block under a heading is the
+    // blank-cell noise the matrix above already avoids.
+    const profiled = tiers.filter((tier) =>
+      [tier.tagline, tier.useCase, tier.targetGroup].some((v) => v != null && v.trim() !== ''),
+    );
+    if (profiled.length) {
+      lines.push(`## ${t('export.tiersHeading')}`);
+      lines.push('');
+      for (const tier of profiled) {
+        lines.push(`### ${inline(tier.name.trim()) || t('tier.unnamed')}`);
+        lines.push('');
+        const fields: [label: string, value: string | undefined][] = [
+          [t('tier.tagline'), tier.tagline],
+          [t('tier.useCase'), tier.useCase],
+          [t('tier.targetGroup'), tier.targetGroup],
+        ];
+        for (const [label, value] of fields) {
+          const v = value?.trim();
+          if (v) lines.push(`- **${label}:** ${inline(v)}`);
+        }
+        lines.push('');
+      }
+    }
   }
 
   return lines.join('\n');

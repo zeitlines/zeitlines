@@ -105,6 +105,92 @@ test('pipes in names and values are escaped inside cells', () => {
   assert.match(md, /ja \\\| nein/);
 });
 
+test('tier profile fields (tagline / useCase / targetGroup) render under a Tiers heading', () => {
+  setLocale('de');
+  const md = pricingToMarkdown(
+    {
+      timelineId: 't',
+      pricing: {
+        features: [{ id: 'x', name: 'F' }],
+        tiers: [
+          {
+            id: 't1',
+            name: 'Micro',
+            price: '0 €',
+            values: { x: true },
+            tagline: 'Micro · 1–5 Anrufe/Tag',
+            useCase: 'Verpasste Anrufe auffangen',
+            targetGroup: 'Einstiegslösung für kleine Unternehmen; Solo-Selbständige',
+          },
+        ],
+      },
+    },
+    { updated: '2026-07-15' },
+  );
+  assert.match(md, /## Tarife/);
+  assert.match(md, /### Micro/);
+  assert.match(md, /- \*\*Tagline:\*\* Micro · 1–5 Anrufe\/Tag/);
+  assert.match(md, /- \*\*Use Case:\*\* Verpasste Anrufe auffangen/);
+  assert.match(md, /- \*\*Zielgruppe:\*\* Einstiegslösung für kleine Unternehmen; Solo-Selbständige/);
+  // The profile block follows the matrix, not the other way round.
+  assert.ok(md.indexOf('## Tarife') > md.indexOf('## Feature-Matrix'));
+});
+
+test('tier profiles omit empty fields and tiers without any profile field', () => {
+  setLocale('de');
+  const md = pricingToMarkdown(
+    {
+      timelineId: 't',
+      pricing: {
+        features: [{ id: 'x', name: 'F' }],
+        tiers: [
+          // Only useCase — Tagline/Zielgruppe lines must not render.
+          { id: 't1', name: 'Solo', price: '0 €', values: { x: true }, useCase: 'Nur eins' },
+          // No profile field at all — no block of its own.
+          { id: 't2', name: 'Bare', price: '1 €', values: { x: true } },
+        ],
+      },
+    },
+    { updated: '2026-07-15' },
+  );
+  assert.match(md, /### Solo/);
+  assert.match(md, /- \*\*Use Case:\*\* Nur eins/);
+  assert.doesNotMatch(md, /Tagline/);
+  assert.doesNotMatch(md, /Zielgruppe/);
+  assert.doesNotMatch(md, /### Bare/);
+});
+
+test('tier profiles: newlines in a field collapse to one line', () => {
+  setLocale('de');
+  const md = pricingToMarkdown(
+    {
+      timelineId: 't',
+      pricing: {
+        features: [{ id: 'x', name: 'F' }],
+        tiers: [
+          {
+            id: 't1',
+            name: 'T',
+            price: '0 €',
+            values: { x: true },
+            targetGroup: 'Erste Zeile\nzweite Zeile',
+          },
+        ],
+      },
+    },
+    { updated: '2026-07-15' },
+  );
+  assert.match(md, /- \*\*Zielgruppe:\*\* Erste Zeile zweite Zeile/);
+  // A raw newline inside the line would break the list structure.
+  assert.doesNotMatch(md, /Zielgruppe:\*\* Erste Zeile\n/);
+});
+
+test('no profile fields anywhere: no Tiers section at all', () => {
+  setLocale('de');
+  const md = pricingToMarkdown(doc, { updated: '2026-07-15' });
+  assert.doesNotMatch(md, /## Tarife/);
+});
+
 test('with versions: adds a version column carrying the per-feature version', () => {
   // The language is set explicitly because this pins the *shape* of the export —
   // that a column appears at all, and what it carries — not the word in its
