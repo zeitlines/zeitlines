@@ -905,3 +905,97 @@
   align-self: start;
   margin-top: var(--space-sm);
 }
+
+/* Native print-to-PDF keeps the active cards or matrix state and removes the
+   viewport's scroll clipping. Without these rules, only the visible slice of
+   the cards grid reaches the browser's print renderer. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+  }
+
+  body {
+    display: block;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .pricing-view,
+  .pricing-view * {
+    visibility: visible;
+  }
+
+  .pricing-view {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .pricing-inner {
+    display: block;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+  }
+
+  .pricing-header {
+    display: block;
+    margin-bottom: 8mm;
+  }
+
+  .pricing-controls {
+    display: none;
+  }
+
+  .pricing-inner > .pricing-table-wrap,
+  .pricing-inner > .pc-cards {
+    display: block;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .pc-cards {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 6mm;
+  }
+
+  .pc-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pricing-table-wrap {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .pricing-table {
+    font-size: 9pt;
+  }
+
+  .pricing-table thead th,
+  .pricing-table thead tr.pm-price-row th,
+  .pricing-table thead tr.pm-price-row td {
+    position: static;
+  }
+
+  .pricing-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

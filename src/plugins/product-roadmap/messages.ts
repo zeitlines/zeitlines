@@ -103,6 +103,7 @@ export const t = pluginMessages('dev.zeitlines.product-roadmap', {
     'view.display': 'Display',
     'view.matrix': 'Matrix',
     'view.cards': 'Cards',
+    'export.pdf': 'PDF',
     // What the manifest declares, in the reader's language. A manifest holds no
     // functions and cannot call `t()`, so the host looks these two up here and
     // falls back to the literal in `manifest.ts` — see `manifestText` in
@@ -215,6 +216,7 @@ export const t = pluginMessages('dev.zeitlines.product-roadmap', {
     'view.display': 'Darstellung',
     'view.matrix': 'Matrix',
     'view.cards': 'Kacheln',
+    'export.pdf': 'PDF',
     'manifest.name': 'Produkt',
     'manifest.view.pricing': 'Preise',
     'move.up': 'Nach oben',

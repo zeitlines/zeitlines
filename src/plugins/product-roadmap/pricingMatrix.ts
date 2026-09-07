@@ -35,6 +35,7 @@ import { openCellEditor, closeCellEditor } from './cellEditor';
 import { anchorRect, layerFor } from './popover';
 import { renderCardsHtml } from './pricingCards';
 import { moveHighlight, showHighlightForm } from './highlightForm';
+import { printPricingView } from './print';
 import { workDotHtml } from './pricingWork';
 import {
   type TimelineFile,
@@ -586,6 +587,14 @@ export function renderPricingView(host: HTMLElement): void {
           )}</div>`
         : '';
 
+  const pdfControl = html(
+    Button({
+      label: t('export.pdf'),
+      variant: 'outline',
+      attrs: { 'data-action': 'export-pdf' },
+    }),
+  );
+
   const switcher = versions.length
     ? html(
         ToolbarControl({
@@ -617,7 +626,7 @@ export function renderPricingView(host: HTMLElement): void {
     `<div class="pricing-inner">` +
     `<div class="pricing-header">` +
     `<h2 class="pricing-title">${escapeHtml(file.name ?? t('pricingModel'))} — ${escapeHtml(t('heading.pricing'))}</h2>` +
-    `<div class="pricing-controls">${addControls}${toggle}${switcher}</div>` +
+    `<div class="pricing-controls">${addControls}${pdfControl}${toggle}${switcher}</div>` +
     `</div>` +
     body +
     `</div>`;
@@ -632,6 +641,10 @@ export function renderPricingView(host: HTMLElement): void {
       next.scrollLeft = carry.left;
     }
   }
+
+  host.querySelector<HTMLButtonElement>('[data-action="export-pdf"]')?.addEventListener('click', () => {
+    printPricingView();
+  });
 
   host.querySelector<HTMLSelectElement>('.pm-version-select')?.addEventListener('change', (e) => {
     const sel = e.currentTarget as HTMLSelectElement;
