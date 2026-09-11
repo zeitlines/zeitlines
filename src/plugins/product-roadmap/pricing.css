@@ -219,7 +219,7 @@
   display: inline-flex;
   min-width: 0;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-3xs);
 }
 
 .pc-highlight-description {
