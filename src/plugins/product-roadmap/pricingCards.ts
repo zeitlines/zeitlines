@@ -2,15 +2,17 @@
 // centered name + tagline + big split price, a divider, then sections with a
 // green circle-check per included feature, value features shown as "Label: value",
 // and higher tiers collapsing carried-over features into a single
-// "← Alles aus <prev>" row (arrow + pill). Read-only; highlights are the curated
-// layer (pricing.highlights). Class names + SVGs match the rendered original.
+// "← Alles aus <prev>" row (arrow + pill). Highlights are the curated
+// layer (pricing.highlights). On writable sources each highlight is editable in
+// place and can be reordered inside its section.
 
 import { escapeHtml } from '../../pluginHost/viewApi';
-import { html, Separator } from '../../pluginHost/viewApi';
+import { html, Icon, IconButton, Separator } from '../../pluginHost/viewApi';
 import { resolveHighlight, resolveHighlightLabel, versionLabel, type ResolvedHighlight } from './pricing';
 import type { TimelineFile } from '../../types';
 import type { PricingHighlight, PricingTier } from './types';
 import { currentPricing } from './compose';
+import { highlightNeighbours } from './highlightOrder';
 
 import { t } from './messages';
 
@@ -45,10 +47,6 @@ function sectionsOf(highlights: PricingHighlight[]): { section: string; items: P
   return order.map((section) => ({ section, items: by.get(section)! }));
 }
 
-function checkRow(inner: string): string {
-  return `<li class="pc-feat pc-yes">${CHECK_SVG}<span>${inner}</span></li>`;
-}
-
 // Badge shown after a highlight label: "Neu" when the switcher pins the exact
 // introducing version, otherwise (in "Alle" mode) an "ab <version>" chip stating
 // when the highlight became available. Pre-existing highlights get neither.
@@ -64,18 +62,54 @@ function highlightBadge(
 }
 
 function bulletHtml(
+  highlight: PricingHighlight,
   label: string,
   r: ResolvedHighlight,
   selected: string | null,
+  editable: boolean,
+  highlights: PricingHighlight[],
   labels?: Record<string, string>,
 ): string {
   const badge = highlightBadge(r, selected, labels);
-  if (r.value) {
-    return checkRow(
-      `<span class="pc-label">${escapeHtml(label)}:</span> <span class="pc-value">${escapeHtml(r.value)}</span>${badge}`,
+  const labelHtml = r.value
+    ? `<span class="pc-label">${escapeHtml(label)}:</span> <span class="pc-value">${escapeHtml(r.value)}</span>${badge}`
+    : `${escapeHtml(label)}${badge}`;
+  const description = highlight.description?.trim()
+    ? `<span class="pc-highlight-description">${escapeHtml(highlight.description.trim())}</span>`
+    : '';
+  const iconName = highlight.icon?.trim() ?? '';
+  const semanticIcon = /^[a-z0-9-]+$/.test(iconName)
+    ? html(Icon({ name: iconName, standalone: true, className: 'pc-highlight-icon' }))
+    : '';
+  const { previous, next } = highlightNeighbours(highlights, highlight.id);
+  const moveButton = (anchor: PricingHighlight, side: 'before' | 'after', glyph: string, ariaLabel: string) =>
+    html(
+      IconButton({
+        icon: glyph,
+        ariaLabel,
+        boxSize: 'sm',
+        className: 'pc-highlight-move',
+        attrs: {
+          'data-move-highlight': highlight.id,
+          [side === 'before' ? 'data-move-before' : 'data-move-after']: anchor.id,
+        },
+      }),
     );
-  }
-  return checkRow(`${escapeHtml(label)}${badge}`);
+  const controls = editable
+    ? `<span class="pc-highlight-reorder">` +
+      (previous ? moveButton(previous, 'before', '↑', t('move.up')) : '') +
+      (next ? moveButton(next, 'after', '↓', t('move.down')) : '') +
+      `</span>`
+    : '';
+  const copyClass = editable ? 'pc-highlight-copy pc-highlight-editable' : 'pc-highlight-copy';
+  const attrs = editable
+    ? ` data-highlight-id="${escapeHtml(highlight.id)}" tabindex="0" role="button"`
+    : '';
+  return (
+    `<li class="pc-feat pc-yes">${CHECK_SVG}${semanticIcon}` +
+    `<span class="pc-highlight-line"><span class="${copyClass}"${attrs}>` +
+    `<span>${labelHtml}</span>${description}</span>${controls}</span></li>`
+  );
 }
 
 // Split a price string ("ab 449 €/Monat") into the big number + currency and a
@@ -102,6 +136,7 @@ export function renderCardsHtml(
   file: TimelineFile,
   versions: string[],
   selected: string | null,
+  editable = false,
 ): string {
   const p = currentPricing(file);
   const highlights = p.highlights ?? [];
@@ -134,7 +169,17 @@ export function renderCardsHtml(
             );
           }
           for (const r of changed) {
-            lines.push(bulletHtml(resolveHighlightLabel(r.h, versions, selected), r.cur, selected, p.versionLabels));
+            lines.push(
+              bulletHtml(
+                r.h,
+                resolveHighlightLabel(r.h, versions, selected),
+                r.cur,
+                selected,
+                editable,
+                highlights,
+                p.versionLabels,
+              ),
+            );
           }
           return `<p class="pc-section-label">${escapeHtml(section)}</p><ul class="pc-features">${lines.join('')}</ul>`;
         })

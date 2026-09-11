@@ -91,6 +91,8 @@ dump, so concurrent edits in different places do not collide.
 | **Tier** (column) | Click the column header → drawer form | `PATCH/DELETE …/tiers/<id>` | `If-Match` on `rowVersion` |
 | **Add a tier** | „+ Tarif" in the header row | `POST …/tiers` | — |
 | **Feature** (row) | Click the row header → drawer form | `PATCH/DELETE …/features/<id>` | `If-Match` on `rowVersion` |
+| **Group title** | Click the group heading → drawer form | one `PATCH …/features/<id>` per member | each feature's `rowVersion` |
+| **Reorder a group** | ↑/↓ beside the group heading | one `POST …/features/move` per member | — |
 | **Add a feature** | „+ Feature" (header row = no group, per section = in that group) | `POST …/features` | — |
 | **Reorder a row** | ↑/↓ on the row (on hover) | `POST …/features/move` | — |
 
@@ -116,6 +118,15 @@ A few decisions that are not obvious:
   the direction the user sees. The client then adopts the order the server returns
   rather than replaying the move locally, because the `sort` column belongs to the
   server.
+- **A group title is derived from its feature rows.** Renaming one patches every
+  feature carrying that title and mirrors each accepted row immediately. This
+  keeps a partial write visible if a later feature reports a version conflict.
+  Local files use one lock counter for the whole document, so a conflict after a
+  preceding member was saved triggers a fresh row read. The retry proceeds only
+  while that row still carries the original group title.
+- **Moving a group moves all of its feature rows.** The visible neighbouring
+  group supplies the anchor, member order stays intact, and every host-returned
+  order is adopted before the next member moves.
 - **The tier form touches no cells,** because it cannot: a cell is a row in
   another collection. The response carries the tier's own data, and the column's
   values are composed from the cell rows that were never in the request.
@@ -127,8 +138,12 @@ A few decisions that are not obvious:
   adding a counter suffix on collision), which keeps the model readable in SQL and
   in MCP output.
 
-**Not in the interface yet:** highlights (the card tiles) and a version editor.
-Adding, reordering or removing a version is a config write (`enable_plugin`).
+Highlights are edited directly in the card view. A highlight form owns its label,
+section, feature links, icon and description. Linked matrix features appear as
+removable chips with a searchable suggestion list; its inclusion and value per
+tier remain derived from those linked cells. Highlights can be reordered inside
+their section. Adding, reordering or removing a version remains a config write
+(`enable_plugin`).
 Renaming is safe and needs no migration: a version is a stable **id** plus a
 renamable **label**, and everything references the id — so changing a label in
 `versionLabels` disturbs nothing.
@@ -241,7 +256,6 @@ Not yet represented in the data model, as a backlog:
 - A dedicated per-tier unit-price field. Today such a value can only be expressed
   as an ordinary feature value.
 - Tiered volume packages per tier (e.g. S/M/L/custom with graduated prices).
-- `highlight.icon` exists in the schema but is unused (no per-tile icons).
 
 Known behaviour: a value highlight appears on every tier card (its value differs
 per tier), so the work dot repeats there.

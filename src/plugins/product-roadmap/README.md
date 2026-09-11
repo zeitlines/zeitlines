@@ -95,8 +95,6 @@ a pricing model yet.
   `descriptionByVersion`, `nameByVersion`, `labelByVersion`, an item's
   `featureVersion`). `scripts/db/migrate-version-ids.ts` moved existing timelines
   onto the id model.
-- **No highlight editor in the interface.** The card tiles are authored through
-  MCP.
 - **It is not a billing system.** It describes what a tier contains, never what a
   customer owes.
 
@@ -104,7 +102,7 @@ a pricing model yet.
 
 | File | What |
 | --- | --- |
-| [`docs/model.md`](docs/model.md) | The model reference: shape, version gating, cell versioning, editing the matrix. |
+| [`docs/model.md`](docs/model.md) | The model reference: shape, version gating, and editing both views. |
 | [`AGENTS.md`](AGENTS.md) | Conventions for changing this plugin. |
 
 Everything here is in the plugin folder rather than in the core documentation,

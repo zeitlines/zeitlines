@@ -199,6 +199,71 @@
 .pc-feat .pc-label { color: var(--fg-muted); }
 .pc-feat .pc-value { font-weight: 700; }
 
+.pc-highlight-editable {
+  cursor: pointer;
+}
+
+.pc-highlight-editable:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.pc-highlight-copy {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+}
+
+.pc-highlight-line {
+  display: inline-flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.pc-highlight-description {
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+}
+
+.pc-highlight-icon {
+  flex-shrink: 0;
+  margin-top: var(--space-3xs);
+}
+
+.pc-highlight-reorder {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-3xs);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.pc-feat:hover .pc-highlight-reorder,
+.pc-highlight-reorder:focus-within {
+  opacity: 1;
+}
+
+.pc-highlight-move.ds-IconButton {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.pc-highlight-move .ds-IconButton-glyph {
+  font-size: 14px;
+}
+
+.pc-highlight-move.ds-IconButton:hover:not(:disabled) {
+  color: var(--accent-strong);
+  background: var(--hover);
+}
+
 .pc-pill {
   display: inline-block;
   background: color-mix(in srgb, var(--fg) 8%, transparent);
@@ -357,6 +422,45 @@
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* The title itself opens the group drawer. It inherits the group row's compact
+   typography while the shared ghost variant supplies focus and hover states. */
+.pm-group-title.ds-Button {
+  padding: var(--space-3xs) var(--space-2xs);
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.pm-group-title.ds-Button:hover:not(:disabled) {
+  color: var(--accent-strong);
+}
+
+.pm-group-reorder {
+  margin-left: var(--space-2xs);
+}
+
+/* Group headings carry their own headline font, weight, tracking and uppercase
+   transform. Reset all four on the arrows and pin the shared small control box,
+   so they have exactly the same square geometry as the feature-row arrows. */
+.pm-group-reorder .pm-move {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pm-group-row:hover .pm-group-reorder,
+.pm-group-reorder:focus-within {
+  opacity: 1;
 }
 
 .pm-check {

@@ -8,7 +8,7 @@
 // row opens its Stammdaten (featureForm.ts), a tier column head opens its
 // Stammdaten (tierForm.ts), a cell opens the value popover (cellEditor.ts), and
 // rows can be added/reordered in place. Each writes only the row or cell it edits.
-// Highlights and the version list are still authored via MCP.
+// The version list is still authored via MCP.
 
 import { escapeHtml } from '../../pluginHost/viewApi';
 import { Button, html, IconButton, SegmentedControl, Select, ToolbarControl } from '../../pluginHost/viewApi';
@@ -29,10 +29,12 @@ import {
 // shadowing the accessor would be a trap for the next reader.
 import { file as currentFile, canWrite, hostApi } from './host';
 import { showFeatureForm, addFeature, moveFeature } from './featureForm';
+import { moveFeatureGroup, showGroupForm } from './groupForm';
 import { showTierForm, addTier } from './tierForm';
 import { openCellEditor, closeCellEditor } from './cellEditor';
 import { anchorRect, layerFor } from './popover';
 import { renderCardsHtml } from './pricingCards';
+import { moveHighlight, showHighlightForm } from './highlightForm';
 import { workDotHtml } from './pricingWork';
 import {
   type TimelineFile,
@@ -114,9 +116,16 @@ function matrixHtml(file: TimelineFile, versions: string[], editable: boolean): 
     `</tr>`;
 
   const bodyRows: string[] = [];
-  for (const { group, features: fs } of groupFeatures(features)) {
-    const visible = fs.filter((f) => featureVisibleForVersion(f, versions, selectedVersion));
-    if (!visible.length) continue;
+  const sections = groupFeatures(features)
+    .map(({ group, features: fs }) => ({
+      group,
+      features: fs.filter((feature) => featureVisibleForVersion(feature, versions, selectedVersion)),
+    }))
+    .filter((section) => section.features.length > 0);
+  const namedSections = sections.filter((section) => section.group);
+
+  for (const section of sections) {
+    const { group, features: visible } = section;
     if (group) {
       // Per-section add, so a new row lands in the section the user is looking at
       // (the toolbar button leaves it ungrouped). Same two-affordance pattern the
@@ -133,8 +142,42 @@ function matrixHtml(file: TimelineFile, versions: string[], editable: boolean): 
             }),
           )
         : '';
+      const groupTitle = editable
+        ? html(
+            Button({
+              label: group,
+              variant: 'ghost',
+              size: 'sm',
+              className: 'pm-group-title',
+              title: t('group.edit'),
+              attrs: { 'data-edit-feature-group': group },
+            }),
+          )
+        : escapeHtml(group);
+      const groupIndex = namedSections.indexOf(section);
+      const previousGroup = namedSections[groupIndex - 1]?.group;
+      const nextGroup = namedSections[groupIndex + 1]?.group;
+      const groupMoveButton = (anchor: string, side: 'before' | 'after', glyph: string, label: string) =>
+        html(
+          IconButton({
+            icon: glyph,
+            ariaLabel: label,
+            boxSize: 'sm',
+            className: 'pm-move',
+            attrs: {
+              'data-move-feature-group': group,
+              [side === 'before' ? 'data-move-group-before' : 'data-move-group-after']: anchor,
+            },
+          }),
+        );
+      const groupReorder = editable
+        ? `<span class="pm-reorder pm-group-reorder">` +
+          (previousGroup ? groupMoveButton(previousGroup, 'before', '↑', t('move.up')) : '') +
+          (nextGroup ? groupMoveButton(nextGroup, 'after', '↓', t('move.down')) : '') +
+          `</span>`
+        : '';
       bodyRows.push(
-        `<tr class="pm-group-row"><th class="pm-feature" colspan="${totalCols}">${escapeHtml(group)}${addInGroup}</th></tr>`,
+        `<tr class="pm-group-row"><th class="pm-feature" colspan="${totalCols}">${groupTitle}${groupReorder}${addInGroup}</th></tr>`,
       );
     }
     for (let i = 0; i < visible.length; i++) {
@@ -265,6 +308,48 @@ function wireFeatureClicks(host: HTMLElement): void {
 // columns. All of it is gated by the attributes matrixHtml only emits when
 // editable, so a read-only timeline wires nothing.
 function wireEditing(host: HTMLElement): void {
+  host.querySelectorAll<HTMLElement>('.pc-highlight-editable[data-highlight-id]').forEach((row) => {
+    const open = () => {
+      const id = row.dataset.highlightId;
+      if (id) showHighlightForm(id);
+    };
+    row.addEventListener('click', (event) => {
+      if ((event.target as HTMLElement).closest('.pc-highlight-move')) return;
+      open();
+    });
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+  });
+
+  host.querySelectorAll<HTMLButtonElement>('.pc-highlight-move[data-move-highlight]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const { moveHighlight: id, moveBefore, moveAfter } = button.dataset;
+      if (!id) return;
+      void moveHighlight(id, moveBefore ? { before: moveBefore } : { after: moveAfter });
+    });
+  });
+
+  host.querySelectorAll<HTMLButtonElement>('[data-edit-feature-group]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const title = btn.dataset.editFeatureGroup;
+      if (title) showGroupForm(title);
+    });
+  });
+
+  host.querySelectorAll<HTMLButtonElement>('.pm-move[data-move-feature-group]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const { moveFeatureGroup: group, moveGroupBefore, moveGroupAfter } = btn.dataset;
+      if (!group) return;
+      if (moveGroupBefore) void moveFeatureGroup(group, moveGroupBefore, 'before');
+      else if (moveGroupAfter) void moveFeatureGroup(group, moveGroupAfter, 'after');
+    });
+  });
+
   host.querySelectorAll<HTMLElement>('.pm-tier-editable[data-tier-id]').forEach((th) => {
     th.addEventListener('click', () => {
       const id = th.dataset.tierId;
@@ -308,6 +393,9 @@ function wireEditing(host: HTMLElement): void {
   });
   host.querySelector<HTMLButtonElement>('[data-action="add-tier"]')?.addEventListener('click', () => {
     void addTier();
+  });
+  host.querySelector<HTMLButtonElement>('[data-action="add-highlight"]')?.addEventListener('click', () => {
+    showHighlightForm();
   });
 }
 
@@ -451,17 +539,20 @@ export function renderPricingView(host: HTMLElement): void {
   const versions = model.versions ?? [];
   if (selectedVersion && !versions.includes(selectedVersion)) selectedVersion = null;
   const hasHighlights = (model.highlights?.length ?? 0) > 0;
-  // Cards need highlights; fall back to matrix when none are defined.
-  if (subView === 'cards' && !hasHighlights) subView = 'matrix';
-
   const editable = canWrite();
+  // Writable sources keep the empty card view reachable because that is where
+  // the first highlight is created. Readers still fall back to the useful matrix.
+  if (subView === 'cards' && !hasHighlights && !editable) subView = 'matrix';
+  const cardsAvailable = hasHighlights || editable;
   const body =
-    subView === 'cards' ? renderCardsHtml(file, versions, selectedVersion) : matrixHtml(file, versions, editable);
+    subView === 'cards'
+      ? renderCardsHtml(file, versions, selectedVersion, editable)
+      : matrixHtml(file, versions, editable);
 
   // The two representations of one model, so a segmented control rather than two
   // buttons — the same component the header uses for Timeline/Liste, which is the
   // same kind of choice.
-  const toggle = hasHighlights
+  const toggle = cardsAvailable
     ? html(
         SegmentedControl({
           ariaLabel: t('view.display'),
@@ -489,7 +580,11 @@ export function renderPricingView(host: HTMLElement): void {
         html(Button({ label: t('feature.add'), variant: 'outline', attrs: { 'data-action': 'add-feature' } })) +
         html(Button({ label: t('tier.add'), variant: 'outline', attrs: { 'data-action': 'add-tier' } })) +
         `</div>`
-      : '';
+      : editable && subView === 'cards'
+        ? `<div class="pm-add">${html(
+            Button({ label: t('highlight.add'), variant: 'outline', attrs: { 'data-action': 'add-highlight' } }),
+          )}</div>`
+        : '';
 
   const switcher = versions.length
     ? html(

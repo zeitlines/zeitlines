@@ -55,6 +55,10 @@ function toData<T extends object>(entity: T): Record<string, unknown> {
 
 // ---- features ---------------------------------------------------------------
 
+export async function apiListFeatures(): Promise<PluginRow[]> {
+  return data().list(FEATURES);
+}
+
 /**
  * Create a feature; returns the ROW the host stored.
  *
@@ -171,9 +175,8 @@ export async function apiSetTierValue(
 
 // ---- highlights -------------------------------------------------------------
 //
-// No UI writes these yet (they are authored through MCP), but they are one of the
-// plugin's four collections and the route is the same one. Having them here is
-// what keeps the next caller from reaching past this module.
+// Highlights are edited in the card view. They still use the same generic
+// collection operations as every other plugin-owned row.
 
 export async function apiAddHighlight(highlight: PricingHighlight): Promise<PluginRow> {
   return data().put(HIGHLIGHTS, { id: highlight.id, data: toData(highlight) });
@@ -189,4 +192,11 @@ export async function apiUpdateHighlight(
 
 export async function apiDeleteHighlight(highlightId: string): Promise<void> {
   await data().remove(HIGHLIGHTS, highlightId);
+}
+
+export async function apiMoveHighlight(
+  highlightId: string,
+  anchor: { after?: string; before?: string },
+): Promise<string[]> {
+  return data().move(HIGHLIGHTS, highlightId, anchor);
 }

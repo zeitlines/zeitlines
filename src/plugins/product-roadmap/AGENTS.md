@@ -80,6 +80,16 @@ reference: [`docs/model.md`](docs/model.md).
   than being deleted with it. `unlink` is the deliberate one: the tile is the
   point, so losing one of five features must not remove it.
 
+- **Highlights are edited from the cards.** Their form writes one row through the
+  generic store; the visible card remains derived from its linked matrix cells.
+  Reordering is scoped to the highlight's section, while the host remains the
+  authority for the collection's global order.
+
+- **A local source locks its whole file.** A multi-row edit cannot reuse every
+  row's initial `rowVersion` after its first write. On conflict, refresh the next
+  row and retry only if the field being changed still has its original value;
+  otherwise preserve the conflict.
+
 - **The version list is config**, not a collection: a short ordered list that is
   always replaced wholesale, which is what config is for. It is two structures:
   `versions` (ordered stable **ids**) and `versionLabels` (`id → label`).
@@ -110,7 +120,8 @@ reference: [`docs/model.md`](docs/model.md).
   `bash scripts/ci/check-bundle-split.sh`.
 - **By hand**, and this is the part no test covers: a pricing model on a local
   `data/*.json` timeline, in the interface. Write a cell, clear it, rename a
-  tier, delete a feature that has cells, and check each one landed in the file.
+  tier, rename and move a group, delete a feature that has cells, and check each
+  one landed in the file.
   The matrix has to update without a reload — that is the derived-model
   invariant, and it fails silently.
 - `npm run export:pricing -- <id>` renders the model to Markdown against a live
