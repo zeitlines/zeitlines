@@ -45,6 +45,14 @@ services:
       # anyone who reaches the published port.
       # TIMELINES_TRUSTED_IDENTITY_HEADER: X-Forwarded-Email
       # TIMELINES_ALLOWED_EMAIL_DOMAINS: example.com
+      # Or turn on the built-in Google sign-in instead (docs/self-hosting.md →
+      # „A sign-in of its own"). Both at once is refused at startup.
+      # AUTH_REQUIRED: 'true'
+      # GOOGLE_CLIENT_ID: …
+      # GOOGLE_CLIENT_SECRET: …
+      # AUTH_SECRET: <random 32+ bytes>
+      # TIMELINES_ACCESS_CONTROL: 'true'
+      # TIMELINES_BOOTSTRAP_ADMIN: you@example.com
     ports:
       # Overridable, because 3120 is also the dev server's default and a machine
       # that runs both would otherwise refuse to start one of them.

@@ -14,18 +14,38 @@
 // between `node:http` and Fetch, and serve static files.
 //
 // NOT in here, on purpose:
-//   - Authentication. There is no gate; put one in front (see #32) or keep the
-//     port private. The server says so on startup rather than pretending.
 //   - TLS. A reverse proxy does that better than a bespoke option would.
 //   - The JIRA proxy and the dev-only config.json override, which belong to the
 //     dev server.
+//
+// Authentication is optional and mounted from `scripts/auth/`: a Google
+// sign-in with membership admission (AUTH_REQUIRED=true), or the operator's own
+// proxy via TIMELINES_TRUSTED_IDENTITY_HEADER. Off entirely, the server is open
+// and says so on every start.
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { toRequest, writeResponse } from './node-http.ts';
-import { decideAccess, parseDomains, type AccessConfig } from './admission.ts';
+/**
+ * The request handler reuses `isPublicPath` from `admission.ts` when the login
+ * gate is on, so the two gates can never disagree about which routes are
+ * public by contract.
+ */
+import { decideAccess, isPublicPath, parseDomains, type AccessConfig } from './admission.ts';
+import { gateConfig, handleAuthRequest, type GateConfig } from './auth/gate.ts';
+import {
+  COOKIE_NAME,
+  SESSION_MAX_AGE,
+  SESSION_RENEW_THRESHOLD,
+  cookieString,
+  hasValidMcpToken,
+  readSession,
+  sign,
+  nowSec,
+  type SessionPayload,
+} from './auth/session.ts';
 import { envValue, hydrateProcessEnv } from './db/env.ts';
 import { getSql, getSqlForSource } from './db/sql.ts';
 import { getServiceClient } from './db/client.ts';
@@ -33,6 +53,7 @@ import {
   accessControlEnabled,
   handleApiRequest,
   liveOverride,
+  serviceRoleFrom,
   type ApiContext,
 } from './db/http.ts';
 import type { DbConnections } from './db/api.ts';
@@ -57,6 +78,57 @@ const ACCESS: AccessConfig = {
   identityHeader: envValue('TIMELINES_TRUSTED_IDENTITY_HEADER')?.toLowerCase() || undefined,
   allowedDomains: parseDomains(envValue('TIMELINES_ALLOWED_EMAIL_DOMAINS')),
 };
+
+/**
+ * The built-in sign-in gate, off unless AUTH_REQUIRED=true. Same switch, same
+ * meaning as the Netlify edge gate. Configured eagerly rather than lazily: a
+ * half-configured gate (client id missing, secret missing) has to fail at
+ * startup, where the operator reads it, rather than on the first login.
+ */
+const GATE: GateConfig | null =
+  envValue('AUTH_REQUIRED') === 'true' ? gateConfig() : null;
+
+// Two gates at once would mean two different claims about who is trusted. A
+// proxy that already authenticates makes the login decorative at best and a lie
+ // at worst — the operator must pick one, and the server refuses to guess which.
+if (GATE && ACCESS.identityHeader) {
+  throw new Error(
+    'AUTH_REQUIRED=true and TIMELINES_TRUSTED_IDENTITY_HEADER are both set. ' +
+      'Use the built-in sign-in (AUTH_REQUIRED) OR an authenticating proxy ' +
+      '(TIMELINES_TRUSTED_IDENTITY_HEADER), not both.',
+  );
+}
+
+/**
+ * Session-gate admission: what the login gate answers instead of the proxy
+ * policy. Public paths pass unchanged (same carve-outs), everything else needs a
+ * valid session, and the refusal is the same machine-readable 401 the Netlify
+ * gate sends — the client sends the top window to the login on exactly that.
+ */
+async function sessionGate(
+  req: Request,
+  pathname: string,
+): Promise<SessionPayload | null | Response> {
+  // Public by contract, same list the proxy gate uses (`isPublicPath`), so the
+  // two admission modes can never disagree about what stays reachable.
+  if (isPublicPath(pathname)) return null;
+  const session = await readSession(req);
+  if (session) return session;
+  // A fetch() from the loaded SPA can't follow a 302 to Google's login across
+  // origins — the redirect just produces a diffuse failure and the edit
+  // silently vanishes. Answer with a machine-readable 401 so the client can
+  // surface „session expired" and send the top window to the login
+  // (`src/editor.ts`). Same body, same status, same header as the edge gate.
+  return new Response(JSON.stringify({ error: 'session_expired' }), {
+    status: 401,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      // Let the client find the login without hardcoding the path.
+      'WWW-Authenticate': 'Session',
+    },
+  });
+}
 
 function identityOf(req: IncomingMessage): string | undefined {
   if (!ACCESS.identityHeader) return undefined;
@@ -141,35 +213,94 @@ const server = createServer((req, res) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
       if (url.pathname.startsWith('/api/')) {
-        const access = decideAccess(url.pathname, identityOf(req), ACCESS);
-        if (!access.allow) {
-          res.writeHead(access.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-          return void res.end(JSON.stringify({ error: access.error, detail: access.detail }));
+        const fetchReq = await toRequest(req);
+
+        // The MCP service token authenticates a program: it passes either gate
+        // without a session or a proxy, exactly as it passes the Netlify gate,
+        // because there is no membership row behind it — its role is configured
+        // (`MCP_TOKEN_ROLE`) rather than looked up.
+        const mcp = hasValidMcpToken(fetchReq);
+
+        // Two admission modes, configured once at startup: the login gate
+        // (session cookie proves the identity) or the proxy policy (trusted
+        // header does). They answer with the same shape — a caller or a refusal
+        // — so everything below stays mode-agnostic.
+        let email: string | undefined;
+        let name: string | undefined;
+        let renewal: string | undefined;
+        if (mcp) {
+          // no caller identity: a program, attributed as `mcp`
+        } else if (GATE) {
+          const outcome = await sessionGate(fetchReq, url.pathname);
+          if (outcome instanceof Response) return void (await writeResponse(res, outcome));
+          if (outcome) {
+            email = outcome.email;
+            name = outcome.name ?? undefined;
+            // Sliding renewal: once the session is in the second half of its
+            // life, re-issue the cookie with a fresh expiry on the way out. An
+            // actively used session is therefore continually topped up and
+            // never expires from under the user. Off the hot path — most
+            // requests skip straight to the handler.
+            if (outcome.exp - nowSec() < SESSION_RENEW_THRESHOLD) {
+              renewal = cookieString(
+                COOKIE_NAME,
+                sign({ ...outcome, exp: nowSec() + SESSION_MAX_AGE }),
+                SESSION_MAX_AGE,
+              );
+            }
+          }
+        } else {
+          const access = decideAccess(url.pathname, identityOf(req), ACCESS);
+          if (!access.allow) {
+            res.writeHead(access.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+            return void res.end(JSON.stringify({ error: access.error, detail: access.detail }));
+          }
+          email = access.email;
         }
-        const email = access.email;
         const ctx: ApiContext = {
           conns: dbConns(),
-          caller: email ? { email } : undefined,
-          // Without a gate there is no identity to attribute to, and inventing
-          // one per request would make the audit panel lie. One honest label for
-          // "this deployment does not know who edits".
-          updatedBy: email ?? 'self-hosted',
+          caller: email ? { email, name } : undefined,
+          // Attribution: the service token has no person behind it (a program,
+          // attributed as `mcp`, its role from MCP_TOKEN_ROLE — docs/users.md →
+          // „Non-human callers"); a gated caller by their address; and without
+          // a gate there is no identity to attribute to, and inventing one per
+          // request would make the audit panel lie. One honest label for "this
+          // deployment does not know who edits".
+          updatedBy: mcp ? 'mcp' : (email ?? 'self-hosted'),
           // Admission (above) asked whether a trusted identity is present at
           // all; this asks what that identity may do. Both are opt-in, and
-          // turning this one on without an identity header refuses everything,
-          // which is the honest outcome of asking for roles without a caller.
+          // turning this on without either gate refuses everything, which is
+          // the honest outcome of asking for roles without a caller.
           accessControl: accessControlEnabled(envValue('TIMELINES_ACCESS_CONTROL')),
           live: liveOverride(envValue('TIMELINES_DB_LIVE')),
+          serviceToken: mcp || undefined,
+          serviceRole: mcp ? serviceRoleFrom(envValue('MCP_TOKEN_ROLE')) : undefined,
           // The whole cascade, not `process.env`: a self-hosted instance keeps
           // its values in an instance profile or a credential file, and reading
           // only the process environment would report „not set" for settings the
           // very same server is using.
           env: envValue,
         };
-        const out = await handleApiRequest(await toRequest(req), ctx);
-        if (out) return void (await writeResponse(res, out));
+        const out = await handleApiRequest(fetchReq, ctx);
+        if (out) {
+          if (renewal) out.headers.append('Set-Cookie', renewal);
+          return void (await writeResponse(res, out));
+        }
         res.writeHead(404, { 'Content-Type': 'application/json' });
         return void res.end(JSON.stringify({ error: 'not found' }));
+      }
+
+      // The login endpoints exist only when the gate is on; with it off, /auth/*
+      // falls through to static serving and answers 404 like any unknown path,
+      // which keeps "the gate is disabled" from looking like "the login is broken".
+      if (GATE && url.pathname.startsWith('/auth/')) {
+        // The member lookup on the callback uses the same handle the dispatcher
+        // will use, so a sign-in and the very next request cannot disagree
+        // about who is a member.
+        const out = await handleAuthRequest(await toRequest(req), url, GATE, dbConns().sql ?? null);
+        if (out) return void (await writeResponse(res, out));
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return void res.end('not found');
       }
 
       // Static files are served ungated on purpose, even with the gate on. The
@@ -211,7 +342,13 @@ server.listen(PORT, HOST, () => {
   );
   // Said every time on purpose. An unauthenticated editable deployment is a
   // decision, and it should not be one somebody makes by not reading a document.
-  if (ACCESS.identityHeader) {
+  if (GATE) {
+    console.log(
+      `[serve] access: sign-in gate on — Google login at /auth/login, admission by ${
+        GATE.accessControl ? 'the member list (TIMELINES_ACCESS_CONTROL)' : 'TIMELINES_ALLOWED_EMAIL_DOMAINS'
+      }`,
+    );
+  } else if (ACCESS.identityHeader) {
     const domains = ACCESS.allowedDomains?.length ? ACCESS.allowedDomains.join(', ') : 'any';
     console.log(
       `[serve] access: gated on ${ACCESS.identityHeader} (domains: ${domains}) — your proxy MUST strip that header from client requests`,
