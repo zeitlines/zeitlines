@@ -210,7 +210,10 @@ Two things to know before you turn it on:
 
 Headless clients pass the same gate the same way they pass the Netlify one: an
 `X-MCP-Token` header matching `MCP_API_TOKEN` (see [`docs/mcp.md`](mcp.md)). The
-token's role comes from `MCP_TOKEN_ROLE`, as everywhere.
+token's role comes from `MCP_TOKEN_ROLE`, as everywhere. The same token also
+switches the remote MCP endpoint on — `/mcp` as Streamable HTTP, again in
+[`docs/mcp.md`](mcp.md) — which carries no session because a login redirect is
+not something an MCP client follows.
 
 ## What the three runtimes share
 
