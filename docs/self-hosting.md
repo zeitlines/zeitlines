@@ -112,10 +112,12 @@ either direction. The reasoning is in
 
 ## Access
 
-**The server brings no login.** With nothing configured, anyone who reaches the
-port can edit, and every write is attributed to `self-hosted`. That is a
-legitimate choice for a port only you can reach, and the server states which mode
-it is in on every start rather than leaving you to find out.
+**The server brings no login — until you configure one.** With nothing
+configured, anyone who reaches the port can edit, and every write is attributed
+to `self-hosted`. That is a legitimate choice for a port only you can reach,
+and the server states which mode it is in on every start rather than leaving
+you to find out. For a deployment without an identity provider, there is also a
+built-in Google sign-in — „A sign-in of its own" below.
 
 For anything else, put an authenticating proxy in front — oauth2-proxy,
 Authelia, an SSO ingress — and name the header it sets:
@@ -153,6 +155,62 @@ function in [`scripts/access.ts`](../scripts/access.ts), covered by tests.
 
 There is no TLS option. A reverse proxy terminates it better than a bespoke
 implementation would, and one is already in the picture for the gate.
+
+## A sign-in of its own
+
+The proxy gate assumes you already have an identity provider. When you do not,
+the same `npm start` process can be the gate itself:
+
+```bash
+AUTH_REQUIRED=true \
+GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… \
+AUTH_SECRET=<random 32+ bytes> \
+TIMELINES_ALLOWED_EMAIL_DOMAINS=example.com \
+npm start
+```
+
+`AUTH_REQUIRED=true` is the same switch the Netlify gate reads, with the same
+meaning: this deployment has a sign-in, and everything else about it — the
+Google client, the cookie secret — is the same configuration the hosted deploy
+carries (see [`docs/deploy.md`](deploy.md)). Google proves the address; a
+HMAC-signed `tl_session` cookie (30 days, sliding renewal) proves it on every
+later request; nothing about the proxy path above changes.
+
+Admission follows the same policy on both runtimes, and the client cannot tell
+them apart: the endpoints are the same (`/auth/login`, `/auth/callback`,
+`/auth/logout`, `/auth/error`), the 401 on an expired session is the same, and
+the refusal pages say the same sentences.
+
+**Who gets in** is decided exactly as the edge gate decides it, switch for
+switch — see [`docs/users.md`](users.md):
+
+- `TIMELINES_ACCESS_CONTROL` off — `TIMELINES_ALLOWED_EMAIL_DOMAINS` decides.
+  That is the domain list the proxy gate reads, not a second one: one list, two
+  consumers. Empty admits nobody, on purpose.
+- on — the member list decides: an invitation is the only way in,
+  `TIMELINES_BOOTSTRAP_ADMIN` creates the first admin, and the sign-in is what
+  accepts an invitation. The implementation is
+  [`scripts/auth/gate.ts`](../scripts/auth/gate.ts), the shared policy lives in
+  [`src/access.ts`](../src/access.ts).
+
+The same three carve-outs hold, unchanged: the public plugin read answers
+without a session (same `isPublicPath` the proxy gate uses — the two modes
+cannot disagree about what is public by contract), the retired pricing route
+answers its 410, and static files stay ungated.
+
+Two things to know before you turn it on:
+
+- **One gate, not two.** `AUTH_REQUIRED=true` together with
+  `TIMELINES_TRUSTED_IDENTITY_HEADER` is refused at startup: the proxy already
+  authenticates, and a login behind it would be decorative at best. Pick one.
+- **The redirect URI is the public origin.** The callback is served at
+  `/auth/callback` on whatever `Host` the request carries, so the OAuth client
+  in Google's console names the address your browsers actually use, and a proxy
+  in front must pass the original `Host` through.
+
+Headless clients pass the same gate the same way they pass the Netlify one: an
+`X-MCP-Token` header matching `MCP_API_TOKEN` (see [`docs/mcp.md`](mcp.md)). The
+token's role comes from `MCP_TOKEN_ROLE`, as everywhere.
 
 ## What the three runtimes share
 
