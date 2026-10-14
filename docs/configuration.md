@@ -26,6 +26,7 @@ variables are resolved through the cascade described in
 | `TIMELINES_ACCESS_CONTROL` | Enables membership-based authorization for sign-in and API requests. Requires a database and a populated member list. See [`users.md`](users.md). |
 | `TIMELINES_BOOTSTRAP_ADMIN` | Address promoted to administrator on first sign-in when membership-based authorization is enabled. |
 | `MCP_TOKEN_ROLE` | Role assigned to the `X-MCP-Token` service identity. Defaults to `editor`; use `viewer` for read-only access. |
+| `MCP_IDENTITY_HEADER` | Name of the header the remote MCP function reads the caller's e-mail address from, for deployments behind a gateway that authenticates users. Unset (the default) keeps the token-only behaviour. See [`mcp.md`](mcp.md). |
 | `TIMELINES_DEFAULT_LANGUAGE` | Initial interface language, `de` or `en`, for readers without a stored preference. Defaults to English. |
 
 Instance profiles add the deployment-specific values that select a database,

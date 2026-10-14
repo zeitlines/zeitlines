@@ -200,7 +200,11 @@ The MCP service token authenticates a program, so there is no membership row to
 find. Its role comes from **`MCP_TOKEN_ROLE`**, default `editor`, which keeps
 existing automations working unchanged on the day the switch is turned on. Set
 `viewer` for a read-only agent. Per-user MCP access over OAuth is a membership
-like any other and asks the same question the browser gate asks.
+like any other and asks the same question the browser gate asks — and so is the
+address a gateway forwards: an operator who fronts the remote MCP server with
+an identity-header-forwarding gateway names it via `MCP_IDENTITY_HEADER`, and
+the caller then acts as that person's row („Caller identity on the remote
+server" (docs/mcp.md)).
 
 ### What happens without a database
 

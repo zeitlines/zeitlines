@@ -67,11 +67,11 @@ offered exactly what a person is. A dimension or value that does not exist narro
 nothing rather than failing, which is the same forgiving rule the panel applies when a
 custom field is removed, so writing one is a quiet no-op rather than an error.
 
-Both servers carry all five. The remote one still has no role model of its own (issue
-#54): it reaches the dispatcher without the membership check the browser goes through,
-so an OAuth caller there acts unrestricted rather than as their instance role. Their
-address is still what `owner` defaults to, so visibility is right; what is missing is
-the refusal.
+Both servers carry all five. The remote one resolves the caller before the
+dispatcher sees anything („Caller identity on the remote server" below): an
+OAuth caller acts as their membership row, a gateway-forwarded identity as that
+person's row, the shared service token as `MCP_TOKEN_ROLE`. The verdict is one
+object, so the saved-view visibility and the write refusal cannot disagree.
 
 The granular item and group tools run read-modify-write: the local server fetches
 the timeline, mutates it in memory and writes it back with a PUT (bulk replace);
@@ -139,6 +139,57 @@ claude mcp add -s user timelines -- \
 | Var             | Where              | Notes                                                        |
 | --------------- | ------------------ | ------------------------------------------------------------ |
 | `MCP_API_TOKEN` | dashboard (secret) | Activates the bypass; identical to the local server's token   |
+| `MCP_IDENTITY_HEADER` | dashboard | Name of the header a gateway sets to the caller's e-mail address (e.g. `X-Forwarded-Email`). Unset (the default) keeps the token-only behaviour. |
+| `PLUGIN_OPERATOR_EMAILS` | dashboard | Comma-separated addresses that may install or uninstall plugins through the remote server once an identity header names them. |
+
+## Caller identity on the remote server
+
+The `/mcp` function authenticates the *transport*: a per-user OAuth token
+(minted by `mcp-oauth`, checked against the member list at sign-in) or the
+shared `MCP_API_TOKEN`. Authentication answers *who reached the server*;
+with `TIMELINES_ACCESS_CONTROL=true` the write tools additionally answer
+*what this identity may do*, through the same rules the browser gate uses
+([`src/access.ts`](../src/access.ts) — one rule, one place):
+
+- **An OAuth caller** acts as their `app_users` row. An active `editor` or
+  `admin` may write; a `viewer`, a suspended member or an address without a
+  row may read and is refused on every write.
+- **A caller behind a gateway** acts as the address the gateway forwards.
+  Operators running zeitlines behind an MCP gateway that authenticates users
+  itself name the header it sets with `MCP_IDENTITY_HEADER`; the function then
+  reads that address *only after* the constant-time Bearer check passed, and
+  resolves it against `app_users` exactly like an OAuth caller. The trust model
+  is the one `TIMELINES_TRUSTED_IDENTITY_HEADER` documents for self-hosting
+  ([„Access"](self-hosting.md)): the header is as trustworthy as the credential
+  that travels with it, which here means the token only the gateway holds — a
+  proxy in front of the function must strip the header from client requests,
+  or whoever sets it impersonates any member.
+- **The shared service token alone** (no OAuth claims, no identity header)
+  acts as `MCP_TOKEN_ROLE`, default `editor` — the behaviour every existing
+  automation already has. An operator wanting a read-only agent sets
+  `viewer`, and writes answer with a refusal that names the role.
+
+With the switch off, nothing changes for anyone: the member list decides
+nothing, and only the attribution does — an OAuth or gateway identity writes
+as their own address rather than the generic `mcp`.
+
+Two deliberate edges:
+
+- **A non-member may still read over MCP** although the browser gate refuses
+  them entirely. The remote server's credential is operator-grade either way,
+  and the member list is what decides *writes*; a deployment that wants reads
+  member-gated too does not hand out the token.
+- **Saved views stay exempt from the write gate**, because `read` is their
+  capability over HTTP as well: a saved view is display state a viewer keeps
+  of their own. The finer rules — seeing only your own unless a view is shared,
+  publishing needs `write` — travel on the same `caller` object and are
+  enforced by the dispatcher, identically to the browser.
+
+Plugin registry writes (`install_plugin`, `set_plugin_installed`,
+`uninstall_plugin`) are operator decisions rather than timeline edits, so an
+identity caller needs `PLUGIN_OPERATOR_EMAILS` to reach them — the same list
+and the same check as over HTTP. The service token remains operator access,
+because it is a server-side secret.
 
 Prerequisites: `TIMELINES_SUPABASE_URL` / `TIMELINES_SUPABASE_SERVICE_KEY` **and**
 `AUTH_REQUIRED=true` must be set, or `timelines-api` does not take effect. If
