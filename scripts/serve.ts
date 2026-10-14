@@ -57,6 +57,7 @@ import {
   type ApiContext,
 } from './db/http.ts';
 import type { DbConnections } from './db/api.ts';
+import { handleMcpRequest } from './mcp/remote-http.ts';
 
 hydrateProcessEnv();
 
@@ -88,6 +89,8 @@ const ACCESS: AccessConfig = {
 const GATE: GateConfig | null =
   envValue('AUTH_REQUIRED') === 'true' ? gateConfig() : null;
 
+/** The remote MCP endpoint's bearer token; unset means no /mcp at all. */
+const MCP_TOKEN = envValue('MCP_API_TOKEN') || null;
 // Two gates at once would mean two different claims about who is trusted. A
 // proxy that already authenticates makes the login decorative at best and a lie
  // at worst — the operator must pick one, and the server refuses to guess which.
@@ -290,6 +293,14 @@ const server = createServer((req, res) => {
         return void res.end(JSON.stringify({ error: 'not found' }));
       }
 
+      // The remote MCP endpoint exists exactly when a token protects it — no
+      // token, no endpoint, which is the same rule the Netlify bypass follows.
+      // It sits outside /api/ and before the static fallback, so the login gate
+      // (if on) never demands a session cookie an MCP client cannot carry.
+      if (url.pathname === '/mcp' && MCP_TOKEN) {
+        return void (await handleMcpRequest(req, res, MCP_TOKEN));
+      }
+
       // The login endpoints exist only when the gate is on; with it off, /auth/*
       // falls through to static serving and answers 404 like any unknown path,
       // which keeps "the gate is disabled" from looking like "the login is broken".
@@ -358,7 +369,10 @@ server.listen(PORT, HOST, () => {
       '[serve] access: OPEN — every visitor can edit, and every edit is attributed to "self-hosted".',
     );
     console.log(
-      '[serve]         Set TIMELINES_TRUSTED_IDENTITY_HEADER behind an authenticating proxy, or keep this port private.',
+      '[serve]         Set TIMELINES_TRUSTED_IDENTITY_HEADER behind an authenticating proxy, or AUTH_REQUIRED=true for the built-in sign-in.',
     );
+  }
+  if (MCP_TOKEN) {
+    console.log('[serve] mcp: remote MCP endpoint at /mcp (Bearer MCP_API_TOKEN)');
   }
 });
