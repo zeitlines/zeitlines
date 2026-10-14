@@ -144,25 +144,29 @@ claude mcp add -s user timelines -- \
 
 ## Caller identity on the remote server
 
-The `/mcp` function authenticates the *transport*: a per-user OAuth token
-(minted by `mcp-oauth`, checked against the member list at sign-in) or the
-shared `MCP_API_TOKEN`. Authentication answers *who reached the server*;
-with `TIMELINES_ACCESS_CONTROL=true` the write tools additionally answer
-*what this identity may do*, through the same rules the browser gate uses
-([`src/access.ts`](../src/access.ts) — one rule, one place):
+The remote server authenticates the *transport*: the Netlify function accepts
+a per-user OAuth token (minted by `mcp-oauth`, checked against the member list
+at sign-in) or the shared `MCP_API_TOKEN`; the self-hosted endpoint accepts the
+token only. Authentication answers *who reached the server*; with
+`TIMELINES_ACCESS_CONTROL=true` the write tools additionally answer *what this
+identity may do*, through the same rules the browser gate uses
+([`src/access.ts`](../src/access.ts) — one rule, one place) and the same
+resolution module on both runtimes
+([`scripts/mcp/caller.ts`](../scripts/mcp/caller.ts)), so the two cannot judge
+differently:
 
 - **An OAuth caller** acts as their `app_users` row. An active `editor` or
   `admin` may write; a `viewer`, a suspended member or an address without a
   row may read and is refused on every write.
 - **A caller behind a gateway** acts as the address the gateway forwards.
   Operators running zeitlines behind an MCP gateway that authenticates users
-  itself name the header it sets with `MCP_IDENTITY_HEADER`; the function then
+  itself name the header it sets with `MCP_IDENTITY_HEADER`; the runtime then
   reads that address *only after* the constant-time Bearer check passed, and
   resolves it against `app_users` exactly like an OAuth caller. The trust model
   is the one `TIMELINES_TRUSTED_IDENTITY_HEADER` documents for self-hosting
   ([„Access"](self-hosting.md)): the header is as trustworthy as the credential
   that travels with it, which here means the token only the gateway holds — a
-  proxy in front of the function must strip the header from client requests,
+  proxy in front of the server must strip the header from client requests,
   or whoever sets it impersonates any member.
 - **The shared service token alone** (no OAuth claims, no identity header)
   acts as `MCP_TOKEN_ROLE`, default `editor` — the behaviour every existing
@@ -195,6 +199,35 @@ Prerequisites: `TIMELINES_SUPABASE_URL` / `TIMELINES_SUPABASE_SERVICE_KEY` **and
 `AUTH_REQUIRED=true` must be set, or `timelines-api` does not take effect. If
 `MCP_API_TOKEN` is unset the bypass is inactive and the site stays gated behind
 the Google login for everyone.
+
+### Self-hosted: remote MCP by URL
+
+A self-hosted deployment (`npm start`) can be the target of the stdio server
+above — point `TIMELINES_LIVE_URL` at it, and the same `X-MCP-Token` bypass that
+the Netlify API honours applies to `scripts/serve.ts` (see „Access" in
+(docs/self-hosting.md)).
+
+It can also serve the remote endpoint itself: with `MCP_API_TOKEN` set, `npm
+start` exposes `/mcp` as a Streamable HTTP MCP server with the same tool surface
+as the Netlify function (the tool registration is shared,
+scripts/mcp/remote-server.ts), so colleagues add it as a remote MCP by URL
+without a local server or a checkout:
+
+| Var             | Meaning                                                     |
+| --------------- | ----------------------------------------------------------- |
+| `MCP_API_TOKEN` | Bearer token for `/mcp`; without it the endpoint does not exist |
+| `MCP_TOKEN_ROLE` | Role the shared token acts as with `TIMELINES_ACCESS_CONTROL=true`; default `editor`, `viewer` for a read-only agent |
+| `MCP_IDENTITY_HEADER` | Name of the header a gateway sets to the caller's e-mail address, as on the function; unset keeps the token-only behaviour |
+
+Authorization is `Bearer <MCP_API_TOKEN>`, nothing else: per-user OAuth tokens
+are minted by the Netlify path's `mcp-oauth.ts`, which a self-hosted deployment
+does not run. The caller verdict is the function's, resolved by the same module
+(„Caller identity on the remote server" above): the token acts as
+`MCP_TOKEN_ROLE`, a gateway identity as that person's row, and writes are
+refused and attributed accordingly — `MCP_TOKEN_ROLE=viewer` makes the agent
+read-only here the same way it does on the function. The endpoint sits outside
+the login gate — an MCP client cannot follow a Google redirect — so `/mcp` works
+with the gate on or off.
 
 ## Agent-facing text is English, all of it
 
