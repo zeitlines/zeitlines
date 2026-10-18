@@ -336,6 +336,9 @@ export default defineConfig({
   server: {
     port: PORT,
     strictPort: true,
+    // Cockpit-Previews: tailscale serve leitet den Browser-Host 1:1 weiter,
+    // Vite blockt ihn ohne Allowlist (DNS-Rebinding-Schutz).
+    allowedHosts: ['mellors.tail594768.ts.net'],
     headers: { 'Content-Security-Policy': CSP },
     watch: {
       // Worktrees live inside the checkout (`.claude/worktrees/<name>`), so the
