@@ -1,4 +1,5 @@
 import type { TimelineFile, TimelineFileItem, View } from './types';
+import { dependsOnOf } from './dependsOn';
 import { escapeHtml, htmlAll, Tag } from './design-system';
 import { normalizeIcon } from './icons';
 import { isOverdue, normalizeStatus } from './status';
@@ -811,14 +812,6 @@ function packTrackBand(
   return used;
 }
 
-function extractDependsOn(meta: unknown): string[] {
-  if (!meta || typeof meta !== 'object') return [];
-  const v = (meta as Record<string, unknown>).dependsOn;
-  if (Array.isArray(v)) return v.map(String).filter((s) => s.length > 0);
-  if (typeof v === 'string' && v.trim()) return [v.trim()];
-  return [];
-}
-
 export function buildFromJson(view: View, file: TimelineFile, edges?: EdgeSelection): BuildResult {
   const items: TimelineItem[] = [];
   const groupSet = new Map<string, TimelineGroup>();
@@ -849,7 +842,7 @@ export function buildFromJson(view: View, file: TimelineFile, edges?: EdgeSelect
     // (they can't be placed) — see `filterBuildForDisplay` callers in render.ts.
     if (!raw.content) continue;
     const id = raw.id || `__auto_${auto++}`;
-    const deps = extractDependsOn(raw.metadata);
+    const deps = dependsOnOf(raw);
     if (deps.length) dependencies.set(id, deps);
     const parentId = readParentId(raw.metadata);
     if (parentId) rawParents.set(id, parentId);

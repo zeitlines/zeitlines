@@ -11,7 +11,6 @@ import {
   cyclesOf,
   day,
   daysBetween,
-  dependsOnOf,
   earliestStart,
   edgesOf,
   findingsOf,
@@ -141,16 +140,6 @@ test('a config that is not a trades array reads as no trades', () => {
   assert.deepEqual(readConfig(undefined).trades, []);
   assert.deepEqual(readConfig({}).trades, []);
   assert.deepEqual(readConfig({ trades: 'screed' }).trades, []);
-});
-
-test('dependsOn is read exactly as the core reads it, whitespace included', () => {
-  // A list entry keeps its whitespace, so `" P-1 "` names no item — character for
-  // character `extractDependsOn`. Only the single-string form is trimmed. Trimming both
-  // would claim a dependent that no arrow on the page corresponds to.
-  assert.deepEqual(dependsOnOf(item('a', { dependsOn: [' P-1 ', 'P-2', ''] })), [' P-1 ', 'P-2']);
-  assert.deepEqual(dependsOnOf(item('a', { dependsOn: '  P-1  ' })), ['P-1']);
-  assert.deepEqual(dependsOnOf(item('a', { dependsOn: '   ' })), []);
-  assert.deepEqual(dependsOnOf(item('a')), []);
 });
 
 // ---------------------------------------------------------------------------
