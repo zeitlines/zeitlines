@@ -138,6 +138,9 @@ export type { DeriveFn, DerivedValues } from './registry';
  */
 export { durationToMs, endFromDuration, isoDateOnly, parseLocalDay, shiftDays } from '../date';
 
+/** The dependency ids the core reads from one item's reserved metadata. */
+export { dependsOnOf } from '../dependsOn';
+
 /**
  * What a plugin's tools receive and return, and the checks the host puts around
  * them. `validateToolPlan` is exported so a plugin's own tests can assert that a

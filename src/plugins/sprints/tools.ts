@@ -49,7 +49,7 @@
 //     carries the sources. An extrapolation is stated as one, out of a sprint's own
 //     capacity, and never as a date the plan then has to hold.
 
-import { type ItemChange, type ToolHandler, type ToolPlan } from '../../pluginHost/api';
+import { dependsOnOf, type ItemChange, type ToolHandler, type ToolPlan } from '../../pluginHost/api';
 import type { TimelineFile, TimelineFileItem } from '../../types';
 import { isDayString, type SprintRaster } from './raster';
 import {
@@ -274,31 +274,11 @@ function missingEstimateNote(where: string, missing: readonly TimelineFileItem[]
   );
 }
 
-/**
- * Which items point at which, through `metadata.dependsOn`.
- *
- * Restated here rather than imported: `extractDependsOn` lives in `src/buildItems.ts`,
- * which a plugin may not import (plugin isolation, see `AGENTS.md` in this folder), so
- * the accepted shapes have to agree with that function by hand — a list of ids, or a
- * single id written as a bare string. `dependsOn` is a core reserved metadata key
- * (`RESERVED_META_KEYS` in src/customFields.ts) and the relation graph draws an edge for
- * every entry, which is why a rule that changes what a sprint holds has to read it.
- *
- * **Character for character the core's rule, including where it does not trim.** An
- * entry of a list keeps its whitespace there (`v.map(String).filter((s) => s.length)`),
- * so `[" P-1 "]` names no item and no edge is drawn; only the single-string form is
- * trimmed. Trimming both here made this file claim a dependent the relation graph does
- * not draw — a note about a stranded successor that no arrow on the page corresponds to.
- */
+/** Which items point at which, through `metadata.dependsOn`. */
 function dependentsByTarget(items: readonly TimelineFileItem[]): Map<string, TimelineFileItem[]> {
   const map = new Map<string, TimelineFileItem[]>();
   for (const item of items) {
-    const raw = item.metadata?.dependsOn;
-    const list = Array.isArray(raw)
-      ? raw.map(String).filter((entry) => entry.length > 0)
-      : typeof raw === 'string' && raw.trim()
-        ? [raw.trim()]
-        : [];
+    const list = dependsOnOf(item);
     for (const target of list) {
       const known = map.get(target);
       if (known) known.push(item);

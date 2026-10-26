@@ -61,12 +61,9 @@ their labels move. `fields.test.ts` asserts both halves: the values stay put acr
 every locale, *and* the labels really do change, so the first assertion cannot pass
 because nothing is translated at all.
 
-**`dependsOnOf` is a hand-kept copy of the core's `extractDependsOn`**, including where
-the core does not trim: a list entry keeps its whitespace, only the single-string form
-is trimmed. Trimming both in `sprints/tools.ts` once made that file claim a dependent
-no arrow on the page corresponded to. This is the third copy in the repository and that
-is a gap in the plugin contract, reported on the extension-point issues rather than
-worked around in a core file.
+**Dependency relations come from the plugin contract.** Rules that reason about
+`metadata.dependsOn` import `dependsOnOf` from `pluginHost/api`, so they use the
+same graph the viewer draws.
 
 ## What must not be renamed
 

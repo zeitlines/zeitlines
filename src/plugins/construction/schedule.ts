@@ -15,7 +15,7 @@
 // the vocabulary of every person the plugin is for. See the README's terminology
 // table.
 
-import { durationToMs, endFromDuration, hasPlugin, isoDateOnly, shiftDays } from '../../pluginHost/api';
+import { dependsOnOf, durationToMs, endFromDuration, hasPlugin, isoDateOnly, shiftDays } from '../../pluginHost/api';
 import type { TimelineFile, TimelineFileItem } from '../../types';
 import { TRADE_ID_PATTERN } from './manifest';
 
@@ -212,34 +212,6 @@ export type Work = {
   dependsOn: string[];
   badValues: BadValue[];
 };
-
-/**
- * Which ids an item depends on, through `metadata.dependsOn`.
- *
- * Restated here rather than imported: `extractDependsOn` lives in `src/buildItems.ts`,
- * which a plugin may not import (plugin isolation), so the accepted shapes have to
- * agree with that function by hand — a list of ids, or a single id written as a bare
- * string. `dependsOn` is a core reserved metadata key and the relation graph draws an
- * edge for every entry, which is why a rule about the order of work has to read it.
- *
- * **Character for character the core's rule, including where it does not trim.** An
- * entry of a list keeps its whitespace there, so `[" P-1 "]` names no item and no edge
- * is drawn; only the single-string form is trimmed. `sprints/tools.ts` carries the same
- * copy with the same warning, and trimming both there once made that file claim a
- * dependent no arrow on the page corresponded to.
- *
- * This is the third copy of the rule in the repository. That it has to be copied at
- * all is a gap in the plugin contract rather than a fact about this plugin: the barrel
- * exports the calendar-day arithmetic for exactly this reason and stops short of the
- * dependency relation. Reported on the extension-point issues, not worked around in a
- * core file.
- */
-export function dependsOnOf(item: TimelineFileItem): string[] {
-  const raw = item.metadata?.dependsOn;
-  if (Array.isArray(raw)) return raw.map(String).filter((entry) => entry.length > 0);
-  if (typeof raw === 'string' && raw.trim()) return [raw.trim()];
-  return [];
-}
 
 /** One binding value, or `undefined` for anything that is not one of the two ids. */
 function bindingOf(value: unknown): DateBinding | undefined {
